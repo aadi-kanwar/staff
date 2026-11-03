@@ -17,7 +17,10 @@
  *                              (ctx.admin.organization may be null). Only for
  *                              creating and showing the organisation itself.
  *   staffQuery               - a staff member reading THEIR OWN data (ctx.self).
- *                              There are no staff mutations: staff only read.
+ *   markerQuery/Mutation     - a working staff member an admin allowed to mark
+ *                              attendance (ctx.self). Only for marking the other
+ *                              staff of their own property (convex/marking.ts);
+ *                              never pay.
  *
  * Admins and staff must have changed the temporary password first.
  *
@@ -251,6 +254,28 @@ export const orgSetupMutation = customMutation(
 export const staffQuery = customQuery(
   rawQuery,
   customCtx(async (ctx) => ({ self: await requireSelf(ctx) })),
+);
+
+/** A working staff member with the attendance-marking permission. */
+export async function requireMarker(ctx: ReadCtx): Promise<SelfViewer> {
+  const self = await requireSelf(ctx);
+  if (self.staff.status !== "active" || self.staff.canMarkAttendance !== true) {
+    throw appError("FORBIDDEN", "You haven't been given attendance marking.");
+  }
+  return self;
+}
+
+export const markerQuery = customQuery(
+  rawQuery,
+  customCtx(async (ctx) => ({ self: await requireMarker(ctx) })),
+);
+
+export const markerMutation = customMutation(
+  rawMutation,
+  customCtx(async (ctx) => ({
+    self: await requireMarker(ctx),
+    db: guardedDb(ctx),
+  })),
 );
 
 // Actions have no database access, so they check the caller through these

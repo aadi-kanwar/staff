@@ -96,6 +96,7 @@ type NewStaff = Partial<{
     amount: number;
     note: string;
   };
+  canMarkAttendance: boolean;
 }>;
 
 /** A staff member created through the real admin action, already past the first-login password change. */
@@ -116,6 +117,7 @@ export async function createStaffMember(
     paidUpToIndex: details.paidUpToIndex,
     reserveStatus: details.reserveStatus ?? "held",
     opening: details.opening,
+    canMarkAttendance: details.canMarkAttendance,
     initialPassword: PASSWORD,
   });
   const userId = await t.run(async (ctx) => {

@@ -85,6 +85,8 @@ export default defineSchema({
     lastWorkingDay: v.optional(v.string()),
     reserveStatus: vReserveStatus,
     reserveForfeitReason: v.optional(v.string()),
+    /** May mark attendance for the other staff of their property (set by an admin). */
+    canMarkAttendance: v.optional(v.boolean()),
     /** Unmarked days before this date are not flagged (tracking hadn't begun for them). */
     attendanceFrom: v.string(),
     createdAt: v.number(),

@@ -49,6 +49,14 @@ Paydays, Ledger, Attendance, Joining Reserve, Exit) · Payroll (due and
 upcoming paydays, pay several at once) · Reports (CSV downloads) · Settings
 (organisation and properties, own account, staff password resets).
 
+**Attendance marking by staff:** an admin can let a staff member mark
+attendance for the other staff at their own property, with the **Can mark
+attendance** box when adding them, or **Allow / Stop attendance marking** on
+their Profile tab. They get a **Mark** tab (`/me/mark`): today and the last 7
+days, everyone else working at their property, one tap per person, then Save.
+They can't mark themselves, another property, or see anyone's pay; every
+change is in the attendance log under their name (`convex/marking.ts`).
+
 **Staff** (`/me`, phone-first): Home (amount pending and next payday, then a
 **pay calendar**: each pay period shaded green and struck through when paid,
 red when pending, blue for the period running now, dashed for later ones,

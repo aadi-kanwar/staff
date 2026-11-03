@@ -117,6 +117,7 @@ export const list = adminQuery({
             status: staff.reserveStatus,
           },
           mustChangePassword: user?.mustChangePassword === true,
+          canMarkAttendance: staff.canMarkAttendance === true,
         };
       }),
     );
@@ -189,6 +190,7 @@ export const get = adminQuery({
         reserveStatus: staff.reserveStatus,
         reserveForfeitReason: staff.reserveForfeitReason ?? null,
         mustChangePassword: user?.mustChangePassword === true,
+        canMarkAttendance: staff.canMarkAttendance === true,
         exitedAt: staff.exitedAt ?? null,
       },
       today,
@@ -340,6 +342,8 @@ const newStaffArgs = {
   paidUpToIndex: v.optional(v.number()),
   reserveStatus: vReserveStatus,
   reserveForfeitReason: v.optional(v.string()),
+  /** May mark attendance for the other staff of their property. */
+  canMarkAttendance: v.optional(v.boolean()),
   opening: v.optional(vOpening),
 };
 
@@ -535,6 +539,7 @@ export const insertStaff = internalMutation({
         args.reserveStatus === "forfeited"
           ? args.reserveForfeitReason?.trim()
           : undefined,
+      canMarkAttendance: args.canMarkAttendance === true ? true : undefined,
       attendanceFrom: today,
       createdAt: now,
       createdBy: args.createdBy,
@@ -662,6 +667,29 @@ export const updateProfile = adminMutation({
         },
         after: { name, department, propertyId },
       },
+    });
+    return null;
+  },
+});
+
+/** Gives or takes away attendance marking for the other staff of their property. */
+export const setMarking = adminMutation({
+  args: { staffId: v.id("staff"), allowed: v.boolean() },
+  handler: async (ctx, args) => {
+    const staff = await loadStaff(ctx, ctx.admin, args.staffId);
+    if (args.allowed) requireEditable(staff);
+    if ((staff.canMarkAttendance === true) === args.allowed) return null;
+    await ctx.db.patch(staff._id, {
+      canMarkAttendance: args.allowed ? true : undefined,
+    });
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "staff.marking_changed",
+      entityType: "staff",
+      entityId: staff._id,
+      staffId: staff._id,
+      metadata: { canMarkAttendance: args.allowed },
     });
     return null;
   },

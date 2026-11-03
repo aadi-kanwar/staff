@@ -1,6 +1,7 @@
 import {
   CalendarCheck,
   CalendarDays,
+  ClipboardCheck,
   FileDown,
   House,
   IndianRupee,
@@ -36,3 +37,16 @@ export const STAFF_NAV: NavItem[] = [
   { href: "/me/payments", label: "Payments", icon: Wallet },
   { href: "/me/profile", label: "Profile", icon: UserRound },
 ];
+
+/** For staff allowed to mark attendance: an extra tab, before Profile. */
+export const MARK_NAV_ITEM: NavItem = {
+  href: "/me/mark",
+  label: "Mark",
+  icon: ClipboardCheck,
+};
+
+export function staffNav(canMarkAttendance: boolean): NavItem[] {
+  return canMarkAttendance
+    ? [...STAFF_NAV.slice(0, 3), MARK_NAV_ITEM, ...STAFF_NAV.slice(3)]
+    : STAFF_NAV;
+}
