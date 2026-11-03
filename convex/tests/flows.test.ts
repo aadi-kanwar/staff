@@ -47,7 +47,7 @@ describe("attendance", () => {
       await admin.as.mutation(api.attendance.setOne, { staffId: s.staffId, date, status: "absent" });
     }
     const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
-    const april = detail.schedule.paydays.find((p) => p.dueDate === "2027-04-16")!;
+    const april = detail.schedule.paydays.find((p) => p.dueDate === "2027-04-15")!;
     expect(april.net).toBe(13_125);
     const month = await admin.as.query(api.attendance.month, { staffId: s.staffId, month: "2027-03" });
     expect(month.days.find((d) => d.date === "2027-03-31")).toMatchObject({ status: "absent", countsForPay: false });
@@ -70,18 +70,18 @@ describe("adjustments and payments", () => {
     const s = await createStaffMember(t, admin);
     const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
     const target = detail.defaultAdjustmentTarget!;
-    expect(target).toBe(`${s.staffId}:${dayIndex(2027, 4, 16)}`);
+    expect(target).toBe(`${s.staffId}:${dayIndex(2027, 4, 15)}`);
     await admin.as.mutation(api.adjustments.add, { staffId: s.staffId, type: "advance", amount: 2_000, note: "Rent", date: "2027-04-10", paydayKey: target });
     await admin.as.mutation(api.adjustments.add, { staffId: s.staffId, type: "bonus", amount: 500, note: "Good work", date: "2027-04-10", paydayKey: target });
     expect((await admin.as.query(api.people.get, { staffId: s.staffId })).schedule.next!.net).toBe(13_500);
 
-    setToday("2027-04-16");
-    await admin.as.mutation(api.payments.record, { staffId: s.staffId, paydayKey: target, amount: 10_000, paidOn: "2027-04-16", mode: "upi" });
+    setToday("2027-04-15");
+    await admin.as.mutation(api.payments.record, { staffId: s.staffId, paydayKey: target, amount: 10_000, paidOn: "2027-04-15", mode: "upi" });
     const after = await admin.as.query(api.people.get, { staffId: s.staffId });
     expect(after.schedule.paydays[0].status).toBe("partially_paid");
     expect(after.schedule.pending).toBe(3_500);
     expect(
-      await errorCode(admin.as.mutation(api.payments.record, { staffId: s.staffId, paydayKey: target, amount: 4_000, paidOn: "2027-04-16", mode: "cash" })),
+      await errorCode(admin.as.mutation(api.payments.record, { staffId: s.staffId, paydayKey: target, amount: 4_000, paidOn: "2027-04-15", mode: "cash" })),
     ).toBe("INVALID_INPUT");
     const home = await s.as.query(api.staff.home, {});
     expect(home.pending).toBe(3_500);
@@ -93,7 +93,7 @@ describe("adjustments and payments", () => {
     const t = await setupTest("2027-05-03");
     const admin = await createAdmin(t);
     const s = await createStaffMember(t, admin);
-    const [apr, may] = [dayIndex(2027, 4, 16), dayIndex(2027, 5, 2)].map((i) => `${s.staffId}:${i}`);
+    const [apr, may] = [dayIndex(2027, 4, 15), dayIndex(2027, 5, 1)].map((i) => `${s.staffId}:${i}`);
     const item = (paydayKey: string, amount: number) => ({ staffId: s.staffId, paydayKey, amount, paidOn: "2027-05-03", mode: "bank" as const });
     expect(await errorCode(admin.as.mutation(api.payments.recordMany, { items: [item(apr, 15_000), item(may, 20_000)] }))).toBe("INVALID_INPUT");
     expect(await t.run((ctx) => ctx.db.query("payments").collect())).toHaveLength(0);
@@ -121,7 +121,7 @@ describe("salary revisions", () => {
       payMode: "half_16day",
     });
     const after = await admin.as.query(api.people.get, { staffId: s.staffId });
-    expect(after.schedule.paydays.find((p) => p.dueDate === "2027-05-18")!.net).toBe(18_000);
+    expect(after.schedule.paydays.find((p) => p.dueDate === "2027-05-17")!.net).toBe(18_000);
     expect(after.schedule.reserve.amount).toBe(10_000);
     expect(after.terms).toHaveLength(2);
     const audit = await t.run((ctx) => ctx.db.query("auditLog").collect());
@@ -152,14 +152,14 @@ describe("salary revisions", () => {
 
 describe("exit and final settlement", () => {
   test("pro-rated final cycle + pending + reserve, then exited with read-only access", async () => {
-    const t = await setupTest("2027-04-16");
+    const t = await setupTest("2027-04-15");
     const admin = await createAdmin(t);
     const s = await createStaffMember(t, admin);
     await admin.as.mutation(api.payments.record, {
       staffId: s.staffId,
-      paydayKey: `${s.staffId}:${dayIndex(2027, 4, 16)}`,
+      paydayKey: `${s.staffId}:${dayIndex(2027, 4, 15)}`,
       amount: 15_000,
-      paidOn: "2027-04-16",
+      paidOn: "2027-04-15",
       mode: "cash",
     });
     setToday("2027-05-11");
@@ -205,18 +205,18 @@ describe("existing staff onboarding", () => {
     const preview = await admin.as.query(api.people.previewOpening, { joinDate: "2026-09-14", monthlySalary: 30_000, payMode: "half_16day" });
     if (!Array.isArray(preview)) {
       // Join 14 Sep → earning from 24 Sep → paydays 10 Oct, 26 Oct (both already passed); next 12 Nov.
-      expect(preview.past.map((p) => p.date)).toEqual(["2026-10-26", "2026-10-10"]);
-      expect(preview.next?.date).toBe("2026-11-12");
+      expect(preview.past.map((p) => p.date)).toEqual(["2026-10-25", "2026-10-09"]);
+      expect(preview.next?.date).toBe("2026-11-11");
       const s = await createStaffMember(t, admin, {
         joinDate: "2026-09-14",
         paidUpToIndex: preview.past[1].paydayIndex,
         opening: { type: "advance", amount: 1_000, note: "Advance given in October" },
       });
       const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
-      expect(detail.payments.map((p) => [p.mode, p.amount, p.paidOn])).toEqual([["opening", 15_000, "2026-10-10"]]);
+      expect(detail.payments.map((p) => [p.mode, p.amount, p.paidOn])).toEqual([["opening", 15_000, "2026-10-09"]]);
       expect(detail.schedule.pending).toBe(14_000); // 26 Oct still owed, less the opening advance
-      expect(detail.adjustments[0].paydayDate).toBe("2026-10-26");
-      expect(detail.schedule.paydays.find((p) => p.dueDate === "2026-10-26")!.net).toBe(14_000);
+      expect(detail.adjustments[0].paydayDate).toBe("2026-10-25");
+      expect(detail.schedule.paydays.find((p) => p.dueDate === "2026-10-25")!.net).toBe(14_000);
     } else {
       throw new Error("preview should not be empty");
     }

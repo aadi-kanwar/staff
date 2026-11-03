@@ -273,7 +273,7 @@ type Cycle = {
 /**
  * The cycles of a schedule. Each salary-terms row starts a segment at its
  * effective date (never before earning starts at join + 10):
- *  - Mode A: 16-day cycles from the segment start, each paid the day after it ends.
+ *  - Mode A: 16-day cycles from the segment start, each paid on its 16th (last) day.
  *  - Mode B: from the segment start to the 30th (the first one pro-rated),
  *    then whole company months, each paid on the 10th of the next month.
  * A last working day cuts the cycle it falls in short; that cycle and every
@@ -300,7 +300,8 @@ function buildCycles(
     while (start <= segEnd && !enough()) {
       const naturalEnd = term.payMode === "half_16day" ? start + HALF_CYCLE_DAYS - 1 : monthEnd(start);
       const end = Math.min(naturalEnd, segEnd);
-      const paydayIndex = term.payMode === "half_16day" ? start + HALF_CYCLE_DAYS : tenthOfNextMonth(start);
+      // Mode A is paid on the cycle's 16th (last) day itself.
+      const paydayIndex = term.payMode === "half_16day" ? naturalEnd : tenthOfNextMonth(start);
       const isFinal = lastIndex !== null && end === lastIndex;
       const dueIndex = lastIndex !== null ? Math.min(paydayIndex, lastIndex + 1) : paydayIndex;
       cycles.push({
@@ -483,7 +484,7 @@ export function computeSchedule(input: EngineInput): Schedule {
 
 /**
  * The dates a salary revision or mode change may take effect: the first
- * day of a cycle (for Mode A, a payday; for Mode B, the 1st of a month),
+ * day of a cycle (for Mode A, the day after a payday; for Mode B, the 1st of a month),
  * from today on and after the latest terms. Returns company-day indices.
  */
 export function revisionStarts(

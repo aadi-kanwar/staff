@@ -116,7 +116,7 @@ export const home = staffQuery({
   },
 });
 
-/** Payments: every payday so far (and the next one), newest first. */
+/** Payments: every payday so far (and the next one). Upcoming ones first, soonest first; then past ones, newest first. */
 export const payments = staffQuery({
   args: {},
   handler: async (ctx) => {
@@ -126,8 +126,10 @@ export const payments = staffQuery({
     const shown = schedule.paydays.filter((p) => p.dueDate <= today || p === schedule.next);
     const rows = shown.map((p, i) => paydayView(p, i + 1));
     if (schedule.settlement) rows.push(settlementView(schedule, today));
+    const upcoming = rows.filter((r) => r.date > today).sort((x, y) => x.date.localeCompare(y.date));
+    const past = rows.filter((r) => r.date <= today).reverse();
     return {
-      paydays: rows.reverse(),
+      paydays: [...upcoming, ...past],
       totalPaid: rows.reduce((a, r) => a + r.paid, 0),
     };
   },

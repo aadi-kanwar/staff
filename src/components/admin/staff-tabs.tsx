@@ -331,11 +331,14 @@ function ReviseForm({ data }: Props) {
 export function PaydaysTab({ data }: Props) {
   const { schedule, profile } = data;
   const editable = profile.status === "active";
-  const rows = [...schedule.paydays].reverse();
+  // Upcoming paydays first, soonest first; then past ones, newest first.
+  const upcoming = schedule.paydays.filter((p) => p.dueDate > data.today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const past = schedule.paydays.filter((p) => p.dueDate <= data.today).reverse();
+  const rows = [...upcoming, ...past];
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <SectionTitle description="Past paydays and the next six. Paydays are worked out from salary terms, attendance and adjustments.">
+        <SectionTitle description="The next six paydays (soonest first), then past ones (newest first). Paydays are worked out from salary terms, attendance and adjustments.">
           Payday schedule
         </SectionTitle>
         {editable ? (

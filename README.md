@@ -48,11 +48,13 @@ Reserve) · Attendance calendar · Payments · Profile (change password).
   virtual date.
 - **Engine** (`convex/lib/payroll.ts`): paydays are computed, never stored.
   Joining Reserve = first 10 days. Half-salary (16-day): cycles of 16 days
-  from join + 10, half the salary each. Monthly (10th): the first cycle to the
+  from join + 10, half the salary each, paid on each cycle's 16th day itself. Monthly (10th): the first cycle to the
   30th, then whole months, paid on the 10th. Present / paid leave / week-off /
   virtual / unmarked = 1, half-day = 0.5, absent = 0. Rounded to the rupee
   only on each payday's final line.
 - Revisions and mode changes start on a cycle's first day only.
+- Payday lists show upcoming paydays first, soonest first, then past ones,
+  newest first.
 
 ## Confidentiality
 

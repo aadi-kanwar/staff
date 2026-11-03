@@ -7,7 +7,7 @@
  *   +919000000001  Admin (only if no admin exists yet)
  *   +919000000002  Asha Rao      Half-salary (16-day), joined 14 Sep 2026, one payday overdue
  *   +919000000003  Ravi Kumar    Monthly (10th), joined 1 Jun 2026, advance on the next payday
- *   +919000000004  Meena Joshi   Half-salary (16-day), joined 3 Feb 2026: first payday was virtual
+ *   +919000000004  Meena Joshi   Half-salary (16-day), joined 4 Feb 2026: first payday was virtual
  *                                Feb 29 (paid 1 Mar); a salary revision is scheduled
  *   +919000000005  Suresh Patel  left on 25 Oct 2026, settled
  */
@@ -42,7 +42,7 @@ type Sample = {
 const SAMPLES: Sample[] = [
   { key: "asha", name: "Asha Rao", phone: "+919000000002", department: "Kitchen", joinDate: "2026-09-14", monthlySalary: 30_000, payMode: "half_16day", asOf: "2026-11-01", paidUpToDate: "2026-10-10" },
   { key: "ravi", name: "Ravi Kumar", phone: "+919000000003", department: "Housekeeping", joinDate: "2026-06-01", monthlySalary: 24_000, payMode: "monthly_10th", asOf: "2026-11-01", paidUpToDate: "2026-10-10" },
-  { key: "meena", name: "Meena Joshi", phone: "+919000000004", department: "Front desk", joinDate: "2026-02-03", monthlySalary: 27_000, payMode: "half_16day", asOf: "2026-11-01", paidUpToDate: "2026-10-23" },
+  { key: "meena", name: "Meena Joshi", phone: "+919000000004", department: "Front desk", joinDate: "2026-02-04", monthlySalary: 27_000, payMode: "half_16day", asOf: "2026-11-01", paidUpToDate: "2026-10-23" },
   { key: "suresh", name: "Suresh Patel", phone: "+919000000005", department: "Security", joinDate: "2026-07-20", monthlySalary: 21_000, payMode: "half_16day", asOf: "2026-10-21", paidUpToDate: "2026-10-20" },
 ];
 
@@ -150,7 +150,7 @@ export const populate = internalMutation({
     };
 
     if (key === "asha") {
-      // 26 Oct payday left unpaid (overdue); 2 Nov left unmarked on purpose.
+      // 25 Oct payday left unpaid (overdue); 2 Nov left unmarked on purpose.
       await mark([{ date: "2026-11-01", status: "present" }]);
       await adjust("bonus", 500, "Diwali bonus");
     }

@@ -27,7 +27,7 @@ test("the sample data covers both modes, the Feb edge case and an exited employe
   expect(meena.schedule.paydays[0].dueDate).toBe("2026-03-01"); // virtual Feb 29
   expect(meena.terms).toHaveLength(2);
   const asha = list[0];
-  expect(asha.pending).toBe(15_000); // 26 Oct overdue
+  expect(asha.pending).toBe(15_000); // 25 Oct overdue
   const dashboard = await admin.query(api.dashboard.summary, {});
   expect(dashboard.overdue.map((r) => r.name)).toContain("Asha Rao");
   const suresh = await admin.query(api.people.get, { staffId: list[3].staffId });

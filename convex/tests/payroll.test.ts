@@ -46,25 +46,25 @@ describe("1. join 20 Mar 2027, Mode A", () => {
     expect(schedule.reserve.status).toBe("held");
   });
 
-  test("paydays are 16 Apr, 2 May, 18 May, 4 Jun, each ₹15,000 with full attendance", () => {
+  test("paydays are 15 Apr, 1 May, 17 May, 3 Jun (each cycle's 16th day), each ₹15,000 with full attendance", () => {
     const first = schedule.paydays.slice(0, 4);
-    expect(first.map((p) => p.dueDate)).toEqual(["2027-04-16", "2027-05-02", "2027-05-18", "2027-06-04"]);
+    expect(first.map((p) => p.dueDate)).toEqual(["2027-04-15", "2027-05-01", "2027-05-17", "2027-06-03"]);
     expect(first.map((p) => p.net)).toEqual([15_000, 15_000, 15_000, 15_000]);
     expect(first[0].cycleStartDate).toBe("2027-03-30");
     expect(first[0].cycleEndDate).toBe("2027-04-15");
   });
 
   test("paydayKey is staffId:virtualPaydayIndex", () => {
-    expect(schedule.paydays[0].key).toBe(paydayKey(STAFF, dayIndex(2027, 4, 16)));
+    expect(schedule.paydays[0].key).toBe(paydayKey(STAFF, dayIndex(2027, 4, 15)));
   });
 });
 
 describe("2. two Absent days in the 30 Mar – 15 Apr cycle", () => {
-  test("16 Apr pays 15,000 × 14/16 = ₹13,125", () => {
+  test("15 Apr pays 15,000 × 14/16 = ₹13,125", () => {
     const attendance: Record<string, AttendanceStatus> = { "2027-04-03": "absent", "2027-04-09": "absent" };
     const schedule = computeSchedule(input({ joinDate: "2027-03-20", terms: [modeA("2027-03-20")], attendance }));
     const april = schedule.paydays[0];
-    expect(april.dueDate).toBe("2027-04-16");
+    expect(april.dueDate).toBe("2027-04-15");
     expect(april.tally.paidDays).toBe(14);
     expect(april.net).toBe(13_125);
     expect(april.absentDeduction).toBe(1_875);
@@ -88,24 +88,24 @@ describe("2. two Absent days in the 30 Mar – 15 Apr cycle", () => {
   });
 });
 
-describe("3. join 3 Feb 2027 (non-leap), Mode A", () => {
-  const schedule = computeSchedule(input({ joinDate: "2027-02-03", terms: [modeA("2027-02-03")] }));
+describe("3. join 4 Feb 2027 (non-leap), Mode A", () => {
+  const schedule = computeSchedule(input({ joinDate: "2027-02-04", terms: [modeA("2027-02-04")] }));
 
-  test("S = 13 Feb; the first payday is virtual 29 Feb, paid on 1 Mar", () => {
-    expect(schedule.earningStartIndex).toBe(dayIndex(2027, 2, 13));
+  test("S = 14 Feb; the first payday is virtual 29 Feb (its 16th day), paid on 1 Mar", () => {
+    expect(schedule.earningStartIndex).toBe(dayIndex(2027, 2, 14));
     const first = schedule.paydays[0];
     expect(first.paydayIndex).toBe(dayIndex(2027, 2, 29));
     expect(first.dueDate).toBe("2027-03-01");
     expect(first.net).toBe(15_000); // virtual days count as paid
-    expect(first.tally.counts.virtual).toBe(0); // the cycle is 13–28 Feb
+    expect(first.tally.counts.virtual).toBe(1); // the cycle is 14–29 Feb
   });
 
-  test("the next payday is 15 Mar, counted from virtual Feb 29, not Mar 1", () => {
+  test("the next payday is 15 Mar, counted from virtual Feb 30, not Mar 1", () => {
     const second = schedule.paydays[1];
     expect(second.paydayIndex).toBe(dayIndex(2027, 3, 15));
     expect(second.dueDate).toBe("2027-03-15");
-    // Its cycle includes the two virtual days, both paid.
-    expect(second.tally.counts.virtual).toBe(2);
+    // Its cycle starts on virtual 30 Feb, which is paid.
+    expect(second.tally.counts.virtual).toBe(1);
     expect(second.net).toBe(15_000);
   });
 });
@@ -140,11 +140,11 @@ describe("5. joining on the 31st", () => {
     expect(schedule.reserve.startDate).toBe("2027-04-01");
     expect(schedule.reserve.endDate).toBe("2027-04-10");
     expect(schedule.paydays[0].cycleStartDate).toBe("2027-04-11");
-    expect(schedule.paydays[0].dueDate).toBe("2027-04-27");
+    expect(schedule.paydays[0].dueDate).toBe("2027-04-26");
   });
 });
 
-describe("6. revision to ₹36,000 after the 2 May payday", () => {
+describe("6. revision to ₹36,000 from the cycle starting 2 May", () => {
   const base = { joinDate: "2027-03-20", terms: [modeA("2027-03-20")], today: "2027-04-20" };
 
   test("2 May is offered as a valid cycle start; a mid-cycle date is not", () => {
@@ -153,7 +153,7 @@ describe("6. revision to ₹36,000 after the 2 May payday", () => {
     expect(isValidRevisionStart(base, dayIndex(2027, 5, 3))).toBe(false);
   });
 
-  test("the 18 May payday pays ₹18,000 and the reserve is unchanged", () => {
+  test("the 17 May payday pays ₹18,000 and the reserve is unchanged", () => {
     const schedule = computeSchedule(
       input({
         ...base,
@@ -162,14 +162,14 @@ describe("6. revision to ₹36,000 after the 2 May payday", () => {
       }),
     );
     const byDate = Object.fromEntries(schedule.paydays.map((p) => [p.dueDate, p.net]));
-    expect(byDate["2027-05-02"]).toBe(15_000);
-    expect(byDate["2027-05-18"]).toBe(18_000);
-    expect(byDate["2027-06-04"]).toBe(18_000);
+    expect(byDate["2027-05-01"]).toBe(15_000);
+    expect(byDate["2027-05-17"]).toBe(18_000);
+    expect(byDate["2027-06-03"]).toBe(18_000);
     expect(schedule.reserve.amount).toBe(10_000);
   });
 });
 
-describe("7. mode switch A → B after the 18 May payday", () => {
+describe("7. mode switch A → B after the 17 May payday", () => {
   test("the first Mode B cycle runs 18–30 May (pro-rated), paid 10 Jun", () => {
     const base = { joinDate: "2027-03-20", terms: [modeA("2027-03-20")], today: "2027-05-05" };
     expect(isValidRevisionStart(base, dayIndex(2027, 5, 18))).toBe(true);
@@ -181,9 +181,9 @@ describe("7. mode switch A → B after the 18 May payday", () => {
     );
     const rows = schedule.paydays.slice(0, 5).map((p) => [p.cycleStartDate, p.cycleEndDate, p.dueDate, p.net]);
     expect(rows).toEqual([
-      ["2027-03-30", "2027-04-15", "2027-04-16", 15_000],
-      ["2027-04-16", "2027-05-01", "2027-05-02", 15_000],
-      ["2027-05-02", "2027-05-17", "2027-05-18", 15_000],
+      ["2027-03-30", "2027-04-15", "2027-04-15", 15_000],
+      ["2027-04-16", "2027-05-01", "2027-05-01", 15_000],
+      ["2027-05-02", "2027-05-17", "2027-05-17", 15_000],
       ["2027-05-18", "2027-05-30", "2027-06-10", 13_000],
       ["2027-06-01", "2027-06-30", "2027-07-10", 30_000],
     ]);
@@ -201,26 +201,26 @@ describe("7. mode switch A → B after the 18 May payday", () => {
       ["2027-04-10", 1_000],
       ["2027-05-10", 30_000],
       ["2027-06-10", 30_000],
-      ["2027-06-17", 15_000],
-      ["2027-07-03", 15_000],
+      ["2027-06-16", 15_000],
+      ["2027-07-02", 15_000],
     ]);
   });
 });
 
 describe("8. exit mid-cycle", () => {
   const terms = [modeA("2027-03-20")];
-  const april = paydayKey(STAFF, dayIndex(2027, 4, 16));
+  const april = paydayKey(STAFF, dayIndex(2027, 4, 15));
   const exitInput = input({
     joinDate: "2027-03-20",
     terms,
     today: "2027-05-11",
     lastWorkingDay: "2027-05-10",
-    payments: [{ id: "p1", paydayKey: april, amount: 15_000, paidOn: "2027-04-16", mode: "cash" }],
+    payments: [{ id: "p1", paydayKey: april, amount: 15_000, paidOn: "2027-04-15", mode: "cash" }],
   });
 
   test("pro-rated final cycle + pending + reserve", () => {
     const schedule = computeSchedule(exitInput);
-    expect(schedule.paydays.map((p) => p.dueDate)).toEqual(["2027-04-16", "2027-05-02", "2027-05-11"]);
+    expect(schedule.paydays.map((p) => p.dueDate)).toEqual(["2027-04-15", "2027-05-01", "2027-05-11"]);
     const final = schedule.paydays.at(-1)!;
     expect(final.isFinal).toBe(true);
     expect(final.cycleStartDate).toBe("2027-05-02");
@@ -259,7 +259,7 @@ describe("8. exit mid-cycle", () => {
 });
 
 describe("9. adjustments and partial payments", () => {
-  const next = paydayKey(STAFF, dayIndex(2027, 4, 16));
+  const next = paydayKey(STAFF, dayIndex(2027, 4, 15));
   const adjustments = [
     { id: "a1", type: "advance" as const, amount: 2_000, paydayKey: next, note: "Festival advance", date: "2027-04-05" },
     { id: "a2", type: "bonus" as const, amount: 500, paydayKey: next, note: "Good work", date: "2027-04-06" },
@@ -280,28 +280,28 @@ describe("9. adjustments and partial payments", () => {
       input({
         joinDate: "2027-03-20",
         terms: [modeA("2027-03-20")],
-        today: "2027-04-16",
+        today: "2027-04-15",
         adjustments,
-        payments: [{ id: "p1", paydayKey: next, amount: 10_000, paidOn: "2027-04-16", mode: "upi" }],
+        payments: [{ id: "p1", paydayKey: next, amount: 10_000, paidOn: "2027-04-15", mode: "upi" }],
       }),
     );
     const payday = schedule.paydays[0];
     expect(payday.status).toBe("partially_paid");
     expect(payday.outstanding).toBe(3_500);
     expect(schedule.pending).toBe(3_500);
-    expect(schedule.next!.dueDate).toBe("2027-05-02");
+    expect(schedule.next!.dueDate).toBe("2027-05-01");
   });
 
   test("statuses: due once the date arrives, paid when settled", () => {
-    const due = computeSchedule(input({ joinDate: "2027-03-20", terms: [modeA("2027-03-20")], today: "2027-04-16" }));
+    const due = computeSchedule(input({ joinDate: "2027-03-20", terms: [modeA("2027-03-20")], today: "2027-04-15" }));
     expect(due.paydays[0].status).toBe("due");
     expect(due.pending).toBe(15_000);
     const paid = computeSchedule(
       input({
         joinDate: "2027-03-20",
         terms: [modeA("2027-03-20")],
-        today: "2027-04-17",
-        payments: [{ id: "p", paydayKey: next, amount: 15_000, paidOn: "2027-04-16", mode: "bank" }],
+        today: "2027-04-16",
+        payments: [{ id: "p", paydayKey: next, amount: 15_000, paidOn: "2027-04-15", mode: "bank" }],
       }),
     );
     expect(paid.paydays[0].status).toBe("paid");
