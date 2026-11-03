@@ -33,6 +33,8 @@ import {
   type PayMode,
   type Schedule,
 } from "./lib/payroll";
+import { paydayRow } from "./lib/adminViews";
+import { recordSettlement } from "./lib/settlement";
 import { allStaff, engineInputFor, loadStaff, scheduleFor, termsOf } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
 import { vAdjustmentType, vPayMode, vReserveStatus } from "./lib/validators";
@@ -78,6 +80,13 @@ export const list = adminQuery({
     );
     return rows;
   },
+});
+
+/** Pay modes with their admin-only labels (kept on the server so the website code never contains them). */
+export const payModes = adminQuery({
+  args: {},
+  handler: async () =>
+    (Object.keys(PAY_MODE_LABELS) as PayMode[]).map((value) => ({ value, label: PAY_MODE_LABELS[value] })),
 });
 
 export const departments = adminQuery({
@@ -146,7 +155,14 @@ export const get = adminQuery({
               date: toRealDate(index),
             }))
           : [],
-      schedule,
+      schedule: {
+        reserve: schedule.reserve,
+        pending: schedule.pending,
+        next: schedule.next && paydayRow(staff, schedule.next, today),
+        settlement: schedule.settlement,
+        unsettledAdjustments: schedule.unsettledAdjustments,
+        paydays: schedule.paydays.map((p) => paydayRow(staff, p, today)),
+      },
       adjustments: adjustments
         .map((a) => ({ ...a, paydayDate: paydayDates.get(a.paydayKey) ?? null }))
         .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt),
@@ -633,46 +649,7 @@ export const confirmSettlement = adminMutation({
     if (staff.lastWorkingDay === undefined) throw appError("CONFLICT", "Set the last working day first.");
     if (staff.lastWorkingDay > today) throw appError("INVALID_DATE", "The settlement can be confirmed once the last working day has come.");
     if (paidOn > today) throw appError("INVALID_DATE", "The payment date can't be in the future.");
-    const schedule = await scheduleFor(ctx, staff, today);
-    const settlement = schedule.settlement!;
-    const now = Date.now();
-    let total = 0;
-    const lines = [
-      ...schedule.paydays.map((p) => ({ key: p.key, outstanding: p.outstanding })),
-      { key: settlement.key, outstanding: settlement.extrasOutstanding },
-    ];
-    for (const line of lines) {
-      if (line.outstanding <= 0) continue;
-      await ctx.db.insert("payments", {
-        staffId: staff._id,
-        paydayKey: line.key,
-        amount: line.outstanding,
-        paidOn,
-        mode: args.mode,
-        note: note ?? "Final settlement",
-        recordedBy: ctx.admin.userId,
-        recordedAt: now,
-      });
-      total += line.outstanding;
-    }
-    const reserveStatus = staff.reserveStatus === "held" ? "released" : staff.reserveStatus;
-    await ctx.db.patch(staff._id, { status: "exited", exitedAt: now, reserveStatus });
-    await writeAudit(ctx, {
-      actorUserId: ctx.admin.userId,
-      action: "exit.settled",
-      entityType: "staff",
-      entityId: staff._id,
-      staffId: staff._id,
-      metadata: {
-        lastWorkingDay: staff.lastWorkingDay,
-        paidOn,
-        mode: args.mode,
-        totalPaid: total,
-        reserveStatus,
-        reserveAmount: settlement.reserveAmount,
-      },
-    });
-    return { totalPaid: total };
+    return await recordSettlement(ctx, staff, { paidOn, mode: args.mode, note }, ctx.admin.userId, today);
   },
 });
 

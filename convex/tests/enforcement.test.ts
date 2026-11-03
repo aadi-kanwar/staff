@@ -70,3 +70,26 @@ test("every exported Convex function is built from a permission wrapper", () => 
   }
   expect(offenders).toEqual([]);
 });
+
+/**
+ * Confidentiality: the website's JavaScript is downloadable by anyone, so
+ * it must never bundle the payroll engine (its formulas, rates, cycle
+ * lengths or pay-mode labels). The browser may only import its types.
+ */
+const websiteSources = import.meta.glob("../../src/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<
+  string,
+  string
+>;
+
+test("the website never imports runtime code from the payroll engine", () => {
+  expect(Object.keys(websiteSources).length).toBeGreaterThan(10);
+  const offenders: string[] = [];
+  for (const [path, source] of Object.entries(websiteSources)) {
+    for (const match of source.matchAll(/import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/g)) {
+      const [, typeOnly, from] = match;
+      if (/lib\/(payroll|staffData|adminViews)$/.test(from) && !typeOnly) offenders.push(`${path}: ${from}`);
+    }
+    if (/Half-salary|16-day|Monthly \(10th\)/.test(source)) offenders.push(`${path}: pay-mode label in website code`);
+  }
+  expect(offenders).toEqual([]);
+});

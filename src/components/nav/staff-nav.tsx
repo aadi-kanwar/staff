@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { NavItem } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
-  return href === "/staff" ? pathname === "/staff" : pathname.startsWith(href);
+  return href === "/admin" || href === "/me" ? pathname === href : pathname.startsWith(href);
 }
 
 /** Desktop: a sidebar. Hidden below the `md` breakpoint. */
@@ -27,7 +27,7 @@ export function StaffSidebar({
   const pathname = usePathname();
   return (
     <nav
-      aria-label={preview ? "Staff (preview)" : "Staff"}
+      aria-label={preview ? "Admin (preview)" : "Admin"}
       className={cn(
         "w-60 shrink-0 flex-col justify-between border-r border-border bg-surface p-3 print:hidden",
         preview ? "flex" : "hidden overflow-y-auto md:flex",
