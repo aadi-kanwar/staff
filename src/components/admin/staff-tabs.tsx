@@ -545,18 +545,24 @@ function ReviseForm({ data }: Props) {
 export function PaydaysTab({ data }: Props) {
   const { schedule, profile } = data;
   const editable = profile.status === "active";
-  // Upcoming paydays first, soonest first; then past ones, newest first.
+  // Owed now first (oldest first), then upcoming (soonest first), then the
+  // rest of the past (newest first).
+  const owed = (p: (typeof schedule.paydays)[number]) =>
+    p.dueDate <= data.today && p.outstanding > 0;
+  const overdue = schedule.paydays
+    .filter(owed)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const upcoming = schedule.paydays
     .filter((p) => p.dueDate > data.today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const past = schedule.paydays
-    .filter((p) => p.dueDate <= data.today)
+    .filter((p) => p.dueDate <= data.today && !owed(p))
     .reverse();
-  const rows = [...upcoming, ...past];
+  const rows = [...overdue, ...upcoming, ...past];
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <SectionTitle description="The next six paydays (soonest first), then past ones (newest first). Paydays are worked out from salary terms, attendance and adjustments.">
+        <SectionTitle description="Anything owed now first, then the next six paydays (soonest first), then past ones (newest first). Paydays are worked out from salary terms, attendance and adjustments.">
           Payday schedule
         </SectionTitle>
         {editable ? (

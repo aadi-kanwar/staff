@@ -38,6 +38,18 @@ const TONE: Record<State | "reserve" | "next", string> = {
   reserve: "bg-muted text-foreground-secondary border-border",
 };
 
+type Absence = PayCalendarData["absences"][number]["kind"];
+const ABSENCE_SHORT: Record<Absence, string> = { absent: "A", half_day: "½" };
+const ABSENCE_TEXT: Record<Absence, string> = {
+  absent: "absent",
+  half_day: "on a half-day",
+};
+/** Solid badges so they read on any period colour. */
+const ABSENCE_BADGE: Record<Absence, string> = {
+  absent: "bg-danger",
+  half_day: "bg-warning",
+};
+
 const STATE_TEXT: Record<State, string> = {
   paid: "Paid",
   pending: "Pending",
@@ -67,6 +79,10 @@ type Cell =
  */
 export function PayCalendar({ data }: { data: PayCalendarData }) {
   const { periods, reserve, today } = data;
+  const absenceOn = useMemo(
+    () => new Map(data.absences.map((a) => [a.date, a.kind])),
+    [data.absences],
+  );
   // The period to highlight: the one running now, else the next to come.
   const next =
     periods.find((p) => p.state === "current") ??
@@ -167,6 +183,7 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
               const isPayday =
                 cell.kind === "period" && cell.period.date === date;
               const isSettlement = data.settlement?.date === date;
+              const absence = absenceOn.get(date);
               const tone =
                 cell.kind === "reserve"
                   ? TONE.reserve
@@ -187,6 +204,9 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
                   : cell.kind === "period"
                     ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.period.from, "d MMM")} to ${formatDay(cell.period.period.to, "d MMM")}, ${STATE_TEXT[cell.period.state]}${isPayday ? ", payday" : ""}`
                     : formatDay(date, "d MMM");
+              const fullLabel = absence
+                ? `${label}. You were ${ABSENCE_TEXT[absence]} this day`
+                : label;
               const body = (
                 <>
                   <span
@@ -209,10 +229,21 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
                       ₹
                     </span>
                   ) : null}
+                  {absence ? (
+                    <span
+                      className={cn(
+                        "flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] leading-none font-bold text-white",
+                        ABSENCE_BADGE[absence],
+                      )}
+                      aria-hidden="true"
+                    >
+                      {ABSENCE_SHORT[absence]}
+                    </span>
+                  ) : null}
                 </>
               );
               const classes = cn(
-                "relative flex h-11 w-full items-center justify-center border-y transition-shadow",
+                "relative flex h-11 w-full flex-col items-center justify-center gap-0.5 border-y leading-none transition-shadow",
                 tone,
                 joinsLeft ? "border-l-0" : "rounded-l-md border-l",
                 joinsRight ? "border-r-0" : "rounded-r-md border-r",
@@ -223,14 +254,14 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
               return (
                 <li key={date}>
                   {cell.kind === "none" ? (
-                    <div className={classes} aria-label={label} role="img">
+                    <div className={classes} aria-label={fullLabel} role="img">
                       {body}
                     </div>
                   ) : (
                     <button
                       type="button"
                       className={classes}
-                      aria-label={label}
+                      aria-label={fullLabel}
                       aria-pressed={isSelected}
                       onClick={() =>
                         setSelectedId(
@@ -259,13 +290,44 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
             <li className="flex items-center gap-1.5">
               <span className="font-bold text-foreground">₹</span> Payday
             </li>
+            <li className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white",
+                  ABSENCE_BADGE.absent,
+                )}
+                aria-hidden="true"
+              >
+                A
+              </span>
+              Absent
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white",
+                  ABSENCE_BADGE.half_day,
+                )}
+                aria-hidden="true"
+              >
+                ½
+              </span>
+              Half-day
+            </li>
           </ul>
         </CardBody>
       </Card>
       {selected === "reserve" ? (
         <ReserveDetails reserve={reserve} />
       ) : selected ? (
-        <PeriodDetails period={selected} highlight={selected === next} />
+        <PeriodDetails
+          period={selected}
+          highlight={selected === next}
+          absences={data.absences.filter(
+            (a) =>
+              a.date >= selected.period.from && a.date <= selected.period.to,
+          )}
+        />
       ) : null}
     </div>
   );
@@ -302,10 +364,18 @@ const BADGE: Record<
 function PeriodDetails({
   period,
   highlight,
+  absences,
 }: {
   period: Period;
   highlight: boolean;
+  absences: PayCalendarData["absences"];
 }) {
+  const datesOf = (kind: "absent" | "half_day") =>
+    absences
+      .filter((a) => a.kind === kind)
+      .map((a) => formatDay(a.date, "d MMM"));
+  const absentDates = datesOf("absent");
+  const halfDates = datesOf("half_day");
   const badge = BADGE[period.state];
   const projected = period.state === "current" || period.state === "upcoming";
   return (
@@ -334,6 +404,22 @@ function PeriodDetails({
             {STATE_TEXT[period.state]}
           </StatusBadge>
         </div>
+        {absentDates.length > 0 || halfDates.length > 0 ? (
+          <div className="flex flex-col gap-1 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-text">
+            {absentDates.length > 0 ? (
+              <p>
+                <strong>Absent</strong> ({absentDates.length}):{" "}
+                {absentDates.join(", ")}
+              </p>
+            ) : null}
+            {halfDates.length > 0 ? (
+              <p>
+                <strong>Half-day</strong> ({halfDates.length}):{" "}
+                {halfDates.join(", ")}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <DetailList
           rows={[
             ...period.lines.map((l) => ({

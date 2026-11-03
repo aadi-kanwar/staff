@@ -60,7 +60,8 @@ change is in the attendance log under their name (`convex/marking.ts`).
 **Staff** (`/me`, phone-first): Home (amount pending and next payday, then a
 **pay calendar**: each pay period shaded green and struck through when paid,
 red when pending, blue for the period running now, dashed for later ones,
-grey for the Joining Reserve days; ₹ marks paydays; tap a day for that
+grey for the Joining Reserve days; ₹ marks paydays; a red **A** marks
+absent days and an amber **½** half-days; tap a day for that
 period's amount, line items and payments) · Attendance calendar · Payments ·
 Profile (change password).
 
@@ -127,8 +128,9 @@ domain is added in Vercel → Settings → Domains; the next deploy updates
   virtual / unmarked = 1, half-day = 0.5, absent = 0. Rounded to the rupee
   only on each payday's final line.
 - Revisions and mode changes start on a cycle's first day only.
-- Payday lists show upcoming paydays first, soonest first, then past ones,
-  newest first.
+- Payday lists (admin Paydays tab, staff Payments) show anything owed now
+  first (oldest first, marked Overdue), then upcoming paydays (soonest
+  first), then past ones (newest first).
 
 ## Confidentiality
 
