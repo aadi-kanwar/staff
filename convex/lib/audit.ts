@@ -24,7 +24,8 @@ export type AuditAction =
   | "organization.renamed"
   | "property.added"
   | "property.renamed"
-  | "report.exported";
+  | "report.exported"
+  | "migration.assigned_existing_data";
 
 /**
  * Appends one entry to the admin audit log. Never put passwords, tokens or
