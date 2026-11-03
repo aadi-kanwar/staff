@@ -54,3 +54,50 @@ test("the staff Home calendar marks periods paid, pending, current and upcoming"
   expect(after.periods[0]).toMatchObject({ state: "paid", remaining: 0 });
   expect(after.pending).toBe(0);
 });
+
+test("absent and half days are on the calendar; anything owed comes first in both payday lists", async () => {
+  const t = await setupTest("2027-05-20");
+  const admin = await createAdmin(t);
+  const s = await createStaffMember(t, admin, {
+    joinDate: "2027-03-20",
+    payMode: "half_16day",
+  });
+  await admin.as.mutation(api.attendance.setOne, {
+    staffId: s.staffId,
+    date: "2027-04-03",
+    status: "absent",
+  });
+  await admin.as.mutation(api.attendance.setOne, {
+    staffId: s.staffId,
+    date: "2027-04-05",
+    status: "half_day",
+  });
+  await admin.as.mutation(api.attendance.setOne, {
+    staffId: s.staffId,
+    date: "2027-04-06",
+    status: "present",
+  });
+  const cal = await s.as.query(api.staff.payCalendar, {});
+  expect(cal.absences).toEqual([
+    { date: "2027-04-03", kind: "absent" },
+    { date: "2027-04-05", kind: "half_day" },
+  ]);
+
+  // Paydays 15 Apr, 1 May, 17 May have passed. Pay 1 May only: 15 Apr and 17 May are still owed.
+  const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
+  const may1 = detail.schedule.paydays.find((p) => p.dueDate === "2027-05-01")!;
+  await admin.as.mutation(api.payments.record, {
+    staffId: s.staffId,
+    paydayKey: may1.key,
+    amount: may1.net,
+    paidOn: "2027-05-01",
+    mode: "upi",
+  });
+  const list = await s.as.query(api.staff.payments, {});
+  expect(list.paydays.map((p) => [p.date, p.remaining > 0])).toEqual([
+    ["2027-04-15", true],
+    ["2027-05-17", true],
+    ["2027-06-03", true],
+    ["2027-05-01", false],
+  ]);
+});

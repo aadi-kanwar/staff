@@ -27,7 +27,7 @@ import {
   type Payday,
   type Schedule,
 } from "./lib/payroll";
-import { scheduleFor, worksOn } from "./lib/staffData";
+import { attendanceOf, scheduleFor, worksOn } from "./lib/staffData";
 import { monthOf, todayInIndia } from "./lib/time";
 
 type Line = { label: string; amount: number };
@@ -194,8 +194,16 @@ export const payCalendar = staffQuery({
     const settlement = schedule.settlement
       ? settlementView(schedule, today)
       : null;
+    // Absent and half days, so the calendar shows them (staff already see
+    // their own marks on the Attendance screen).
+    const marks = await attendanceOf(ctx, staff._id);
+    const absences = marks
+      .filter((m) => m.status === "absent" || m.status === "half_day")
+      .map((m) => ({ date: m.date, kind: m.status as "absent" | "half_day" }))
+      .sort((a, b) => a.date.localeCompare(b.date));
     return {
       today,
+      absences,
       joinDate: staff.joinDate,
       lastWorkingDay: staff.lastWorkingDay ?? null,
       status: staff.status,
@@ -213,7 +221,11 @@ export const payCalendar = staffQuery({
   },
 });
 
-/** Payments: every payday so far (and the next one). Upcoming ones first, soonest first; then past ones, newest first. */
+/**
+ * Payments: every payday so far (and the next one). Anything still owed
+ * whose date has come comes first (oldest first), then upcoming ones
+ * (soonest first), then the rest of the past (newest first).
+ */
 export const payments = staffQuery({
   args: {},
   handler: async (ctx) => {
@@ -225,12 +237,18 @@ export const payments = staffQuery({
     );
     const rows = shown.map((p, i) => paydayView(p, i + 1));
     if (schedule.settlement) rows.push(settlementView(schedule, today));
+    const owed = (r: (typeof rows)[number]) =>
+      r.date <= today && r.remaining > 0;
+    const overdue = rows
+      .filter(owed)
+      .sort((x, y) => x.date.localeCompare(y.date));
     const upcoming = rows
       .filter((r) => r.date > today)
       .sort((x, y) => x.date.localeCompare(y.date));
-    const past = rows.filter((r) => r.date <= today).reverse();
+    const past = rows.filter((r) => r.date <= today && !owed(r)).reverse();
     return {
-      paydays: [...upcoming, ...past],
+      today,
+      paydays: [...overdue, ...upcoming, ...past],
       totalPaid: rows.reduce((a, r) => a + r.paid, 0),
     };
   },

@@ -18,30 +18,56 @@ export default function StaffPayments() {
       <div className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl tracking-tight">Payments</h1>
         <p className="text-foreground-secondary">
-          Total paid to you: <strong className="tabular">{formatINR(data.totalPaid)}</strong>
+          Total paid to you:{" "}
+          <strong className="tabular">{formatINR(data.totalPaid)}</strong>
         </p>
       </div>
       {data.paydays.length === 0 ? (
-        <EmptyState icon={Wallet} title="No paydays yet" description="Your first payday will appear here." />
+        <EmptyState
+          icon={Wallet}
+          title="No paydays yet"
+          description="Your first payday will appear here."
+        />
       ) : (
         <ul className="flex flex-col gap-3" aria-label="Paydays">
           {data.paydays.map((p) => (
             <li key={p.id}>
-              <Card>
+              <Card
+                className={
+                  p.date < data.today && p.remaining > 0
+                    ? "border-danger-border"
+                    : undefined
+                }
+              >
                 <CardBody className="flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex flex-col">
                       <span className="text-sm text-foreground-secondary">
                         {p.title} · {formatDay(p.date, "EEE d MMM yyyy")}
                       </span>
-                      <span className="tabular font-serif text-2xl">{formatINR(p.amount)}</span>
+                      <span className="tabular font-serif text-2xl">
+                        {formatINR(p.amount)}
+                      </span>
                     </div>
-                    <PaydayStatusBadge status={p.status} />
+                    <PaydayStatusBadge
+                      status={p.status}
+                      overdue={p.date < data.today && p.remaining > 0}
+                    />
                   </div>
                   <DetailList
                     rows={[
-                      ...p.lines.map((l) => ({ label: l.label, value: formatINR(l.amount, { exact: true, signed: l.amount < 0 }) })),
-                      { label: "Amount", value: formatINR(p.amount), strong: true },
+                      ...p.lines.map((l) => ({
+                        label: l.label,
+                        value: formatINR(l.amount, {
+                          exact: true,
+                          signed: l.amount < 0,
+                        }),
+                      })),
+                      {
+                        label: "Amount",
+                        value: formatINR(p.amount),
+                        strong: true,
+                      },
                     ]}
                   />
                   {p.payments.length > 0 ? (
@@ -49,15 +75,20 @@ export default function StaffPayments() {
                       {p.payments.map((pay, i) => (
                         <p key={i} className="flex justify-between gap-3">
                           <span>
-                            Paid {formatDay(pay.paidOn, "d MMM yyyy")} · {pay.method}
+                            Paid {formatDay(pay.paidOn, "d MMM yyyy")} ·{" "}
+                            {pay.method}
                           </span>
-                          <span className="tabular">{formatINR(pay.amount)}</span>
+                          <span className="tabular">
+                            {formatINR(pay.amount)}
+                          </span>
                         </p>
                       ))}
                       {p.remaining > 0 ? (
                         <p className="flex justify-between gap-3 font-medium text-warning">
                           <span>Still to come</span>
-                          <span className="tabular">{formatINR(p.remaining)}</span>
+                          <span className="tabular">
+                            {formatINR(p.remaining)}
+                          </span>
                         </p>
                       ) : null}
                     </div>
