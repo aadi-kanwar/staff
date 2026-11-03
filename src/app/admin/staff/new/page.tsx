@@ -48,6 +48,7 @@ export default function NewStaffPage() {
     payMode: "" as PayMode | "",
     paidUpTo: "",
     reserveStatus: "held" as "held" | "released" | "forfeited",
+    canMarkAttendance: false,
     reserveForfeitReason: "",
     openingType: "" as "" | "advance" | "deduction" | "bonus",
     openingAmount: "",
@@ -146,6 +147,7 @@ export default function NewStaffPage() {
                     note: form.openingNote,
                   }
                 : undefined,
+              canMarkAttendance: form.canMarkAttendance,
               initialPassword: form.password,
             });
             toast.success(`${form.name.trim()} added.`);
@@ -240,6 +242,22 @@ export default function NewStaffPage() {
                 />
               )}
             </Field>
+            <label className="flex min-h-11 items-start gap-3 rounded-md border border-border bg-subtle px-3 py-2.5 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-5 shrink-0 accent-primary"
+                checked={form.canMarkAttendance}
+                onChange={(e) => set("canMarkAttendance", e.target.checked)}
+              />
+              <span className="flex flex-col">
+                <span className="text-sm font-medium">Can mark attendance</span>
+                <span className="text-sm text-foreground-secondary">
+                  Lets them mark attendance for the other staff at their
+                  property, from their phone (today and the last 7 days). They
+                  still can&apos;t see anyone&apos;s pay.
+                </span>
+              </span>
+            </label>
           </CardBody>
         </Card>
 

@@ -5,7 +5,8 @@
  *
  * Accounts (password = DEV_SEED_PASSWORD, no forced change):
  *   +919000000001  Admin (only if no admin exists yet)
- *   +919000000002  Asha Rao      Half-salary (16-day), joined 14 Sep 2026, one payday overdue
+ *   +919000000002  Asha Rao      Half-salary (16-day), joined 14 Sep 2026, one payday overdue;
+ *                                can mark attendance for North PG
  *   +919000000003  Ravi Kumar    Monthly (10th), joined 1 Jun 2026, advance on the next payday
  *   +919000000004  Meena Joshi   Half-salary (16-day), joined 4 Feb 2026: first payday was virtual
  *                                Feb 29 (paid 1 Mar); a salary revision is scheduled
@@ -50,6 +51,8 @@ type Sample = {
   paidUpToDate?: string;
   /** Which of the organisation's properties (by position). */
   property: 0 | 1;
+  /** May mark attendance for the others at their property. */
+  canMarkAttendance?: boolean;
 };
 
 const SAMPLES: Sample[] = [
@@ -64,6 +67,7 @@ const SAMPLES: Sample[] = [
     asOf: "2026-11-01",
     paidUpToDate: "2026-10-10",
     property: 0,
+    canMarkAttendance: true,
   },
   {
     key: "ravi",
@@ -180,6 +184,7 @@ export const dev = internalAction({
             ? paydayIndexOn(sample, sample.paidUpToDate)
             : undefined,
           reserveStatus: "held",
+          canMarkAttendance: sample.canMarkAttendance,
           userId,
           createdBy: adminId,
           asOf: sample.asOf,

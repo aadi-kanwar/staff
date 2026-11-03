@@ -63,7 +63,7 @@ test("only lib/functions.ts imports raw query/mutation/action builders", () => {
 
 test("every exported Convex function is built from a permission wrapper", () => {
   const wrapperNames =
-    /\b(viewerQuery|signedInAction|adminQuery|adminMutation|adminAction|orgSetupQuery|orgSetupMutation|staffQuery|internalQuery|internalMutation|internalAction)\(/;
+    /\b(viewerQuery|signedInAction|adminQuery|adminMutation|adminAction|orgSetupQuery|orgSetupMutation|staffQuery|markerQuery|markerMutation|internalQuery|internalMutation|internalAction)\(/;
   const offenders: string[] = [];
   for (const [path, source] of backendFiles()) {
     if (

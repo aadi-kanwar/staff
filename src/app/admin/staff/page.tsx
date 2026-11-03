@@ -1,6 +1,12 @@
 "use client";
 
-import { DoorOpen, KeyRound, UserPlus, Users } from "lucide-react";
+import {
+  ClipboardCheck,
+  DoorOpen,
+  KeyRound,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -124,6 +130,11 @@ export default function StaffListPage() {
                       {row.lastWorkingDay && row.status === "active" ? (
                         <StatusBadge tone="warning" icon={DoorOpen}>
                           Last day {formatDay(row.lastWorkingDay)}
+                        </StatusBadge>
+                      ) : null}
+                      {row.canMarkAttendance && row.status === "active" ? (
+                        <StatusBadge tone="primary" icon={ClipboardCheck}>
+                          Marks attendance
                         </StatusBadge>
                       ) : null}
                       {row.mustChangePassword ? (

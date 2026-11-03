@@ -58,7 +58,7 @@ async function markOf(
 }
 
 /** Sets one mark and logs the change. Returns true if anything changed. */
-async function setMark(
+export async function setMark(
   ctx: Pick<MutationCtx, "db">,
   staff: Doc<"staff">,
   date: string,

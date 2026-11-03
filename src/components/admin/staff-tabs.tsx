@@ -4,6 +4,7 @@ import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   ChevronLeft,
+  ClipboardCheck,
   ChevronRight,
   Copy,
   DoorOpen,
@@ -138,6 +139,12 @@ export function ProfileTab({ data }: Props) {
                   ? "Temporary (not changed yet)"
                   : "Chosen by them",
               },
+              {
+                label: "Attendance marking",
+                value: profile.canMarkAttendance
+                  ? "Can mark the other staff at their property"
+                  : "No",
+              },
             ]}
           />
           <div className="flex flex-wrap gap-2">
@@ -146,10 +153,37 @@ export function ProfileTab({ data }: Props) {
               staffId={data.profile.staffId}
               name={data.profile.name}
             />
+            <MarkingToggle data={data} />
           </div>
         </CardBody>
       </Card>
     </>
+  );
+}
+
+/** Gives or takes away attendance marking (for the other staff of their property). */
+function MarkingToggle({ data }: Props) {
+  const setMarking = useMutation(api.people.setMarking);
+  const { busy, run } = useRun();
+  const { profile } = data;
+  if (profile.status !== "active" && !profile.canMarkAttendance) return null;
+  const allowed = profile.canMarkAttendance;
+  return (
+    <Button
+      variant="secondary"
+      loading={busy}
+      onClick={() =>
+        run(
+          () => setMarking({ staffId: profile.staffId, allowed: !allowed }),
+          allowed
+            ? `${profile.name} can no longer mark attendance.`
+            : `${profile.name} can now mark attendance for their property.`,
+        )
+      }
+    >
+      <Icon icon={ClipboardCheck} />
+      {allowed ? "Stop attendance marking" : "Allow attendance marking"}
+    </Button>
   );
 }
 

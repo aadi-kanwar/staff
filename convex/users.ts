@@ -56,6 +56,9 @@ export const me = viewerQuery({
       role: user.role ?? null,
       mustChangePassword: user.mustChangePassword === true,
       staffStatus: staff?.status ?? null,
+      /** Staff: may mark attendance for the others at their property. */
+      canMarkAttendance:
+        staff?.status === "active" && staff.canMarkAttendance === true,
     };
   },
 });

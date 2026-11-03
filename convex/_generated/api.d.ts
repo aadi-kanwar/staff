@@ -29,6 +29,7 @@ import type * as lib_settlement from "../lib/settlement.js";
 import type * as lib_staffData from "../lib/staffData.js";
 import type * as lib_time from "../lib/time.js";
 import type * as lib_validators from "../lib/validators.js";
+import type * as marking from "../marking.js";
 import type * as migrations from "../migrations.js";
 import type * as organization from "../organization.js";
 import type * as paydays from "../paydays.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   "lib/staffData": typeof lib_staffData;
   "lib/time": typeof lib_time;
   "lib/validators": typeof lib_validators;
+  marking: typeof marking;
   migrations: typeof migrations;
   organization: typeof organization;
   paydays: typeof paydays;
