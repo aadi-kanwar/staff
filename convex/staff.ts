@@ -4,8 +4,13 @@
  * How pay is calculated is a company secret. These queries return
  * purpose-built summaries only: dates, amounts, statuses and short labels.
  * They must never return salary-term documents, the pay mode, day rates,
- * formulas, cycle boundaries or cycle lengths, and never say how absences
- * are valued per day (a line like "Absent × 2: −₹1,875" is fine).
+ * formulas or cycle lengths, and never say how absences are valued per day
+ * (a line like "Absent × 2: −₹1,875" is fine).
+ *
+ * Pay periods' first and last dates ARE shown (owner's decision, Nov 2026:
+ * the Home calendar shades each period by whether it's paid). They were
+ * already apparent from the payday dates. Only dates are given, as
+ * `period.from` / `period.to`, never the mode, length or how it's derived.
  * convex/tests/confidentiality.test.ts calls every query in this file and
  * checks the payloads.
  *
@@ -157,6 +162,53 @@ export const home = staffQuery({
               amount: Math.max(settlement.totalOutstanding, 0),
             }
           : null,
+    };
+  },
+});
+
+type PeriodState = "paid" | "pending" | "current" | "upcoming";
+
+/** How a pay period looks on the calendar. */
+function periodState(p: Payday, today: string): PeriodState {
+  if (p.outstanding <= 0 && (p.paid > 0 || p.dueDate <= today)) return "paid";
+  if (p.dueDate <= today) return "pending";
+  return p.cycleStartDate <= today ? "current" : "upcoming";
+}
+
+/**
+ * Home calendar: every pay period from joining to the next few ahead, each
+ * with its dates, payday, amount and whether it's paid, plus the Joining
+ * Reserve days. Same amounts and line items as `payments`.
+ */
+export const payCalendar = staffQuery({
+  args: {},
+  handler: async (ctx) => {
+    const staff = ctx.self.staff;
+    const today = todayInIndia();
+    const schedule = await scheduleFor(ctx, staff, today, 3);
+    const periods = schedule.paydays.map((p, i) => ({
+      ...paydayView(p, i + 1),
+      period: { from: p.cycleStartDate, to: p.cycleEndDate },
+      state: periodState(p, today),
+    }));
+    const settlement = schedule.settlement
+      ? settlementView(schedule, today)
+      : null;
+    return {
+      today,
+      joinDate: staff.joinDate,
+      lastWorkingDay: staff.lastWorkingDay ?? null,
+      status: staff.status,
+      reserve: {
+        ...reserveView(schedule, staff.reserveForfeitReason),
+        period: {
+          from: schedule.reserve.startDate,
+          to: schedule.reserve.endDate,
+        },
+      },
+      periods,
+      settlement,
+      pending: Math.max(schedule.pending, 0),
     };
   },
 });

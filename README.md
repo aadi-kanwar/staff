@@ -49,8 +49,12 @@ Paydays, Ledger, Attendance, Joining Reserve, Exit) · Payroll (due and
 upcoming paydays, pay several at once) · Reports (CSV downloads) · Settings
 (organisation and properties, own account, staff password resets).
 
-**Staff** (`/me`, phone-first): Home (next payday, amount pending, Joining
-Reserve) · Attendance calendar · Payments · Profile (change password).
+**Staff** (`/me`, phone-first): Home (amount pending and next payday, then a
+**pay calendar**: each pay period shaded green and struck through when paid,
+red when pending, blue for the period running now, dashed for later ones,
+grey for the Joining Reserve days; ₹ marks paydays; tap a day for that
+period's amount, line items and payments) · Attendance calendar · Payments ·
+Profile (change password).
 
 ## Setup (one time)
 
@@ -95,7 +99,9 @@ Reserve) · Attendance calendar · Payments · Profile (change password).
 ## Confidentiality
 
 - Staff only reach `convex/staff.ts`, which returns dates, amounts, statuses
-  and short labels. `convex/tests/confidentiality.test.ts` calls every staff
+  and short labels. Pay periods' first and last dates are shown on the Home
+  calendar (owner's decision, Nov 2026); the pay mode, period length, rates
+  and formulas are not. `convex/tests/confidentiality.test.ts` calls every staff
   query and fails on `payMode`, `rate`, `dayRate`, `cycleStart`, `cycleEnd`,
   `cycleLength` (and relatives) or pay-mode text.
 - The website's JavaScript never contains the engine or the pay-mode labels
