@@ -7,6 +7,7 @@
     "dev": "next dev",
     "dev:backend": "convex dev",
     "build": "next build",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit && tsc -p convex/tsconfig.json --noEmit",

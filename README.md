@@ -79,6 +79,32 @@ Profile (change password).
    If the admin has no organisation yet, "Sample organisation" is created with
    two properties, North PG and South PG.
 
+## Going live (production)
+
+Convex has a separate **production** database next to the development one.
+Vercel hosts the website and, on every deploy, `scripts/vercel-build.mjs`
+prepares production automatically (login keys, `SITE_URL`, latest backend
+code, the first admin). One time:
+
+1. **Convex:** <https://dashboard.convex.dev> → project **staff** → switch to
+   **Production** (top of the page) → **Settings → URL & Deploy Key →
+   Generate Production Deploy Key** → copy it.
+2. **Convex, still on Production → Settings → Environment Variables:** add
+   `FIRST_ADMIN_PHONE`, `FIRST_ADMIN_PASSWORD` (8+ characters, not the phone
+   number) and `FIRST_ADMIN_NAME`.
+3. **Vercel:** <https://vercel.com> → **Add New… → Project** → import
+   **staff** → **Environment Variables**: `CONVEX_DEPLOY_KEY` = the key from
+   step 1 (Production only) → **Deploy**.
+4. Open the live address, sign in with the first admin's number and
+   password, name your organisation and first property. Then delete
+   `FIRST_ADMIN_PASSWORD` from the Convex production settings.
+
+After that, every push to `main` deploys automatically. Never set
+`STAFF_ALLOW_DEV_SEED` on production (the build refuses to run if it is).
+Data in the development deployment is not copied to production. A custom
+domain is added in Vercel → Settings → Domains; the next deploy updates
+`SITE_URL` to match.
+
 ## How pay works (admin knowledge only)
 
 - **Company calendar** (`convex/lib/companyCalendar.ts`): every month has 30
