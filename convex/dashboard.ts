@@ -9,13 +9,17 @@ export const summary = adminQuery({
   args: {},
   handler: async (ctx) => {
     const today = todayInIndia();
-    const entries = await allSchedules(ctx, today);
-    const working = entries.filter(({ staff }) => staff.status === "active" && worksOn(staff, today));
+    const entries = await allSchedules(ctx, ctx.admin, today);
+    const working = entries.filter(
+      ({ staff }) => staff.status === "active" && worksOn(staff, today),
+    );
     let marked = 0;
     for (const { staff } of working) {
       const mark = await ctx.db
         .query("attendance")
-        .withIndex("by_staff_date", (q) => q.eq("staffId", staff._id).eq("date", today))
+        .withIndex("by_staff_date", (q) =>
+          q.eq("staffId", staff._id).eq("date", today),
+        )
         .unique();
       if (mark !== null) marked += 1;
     }
@@ -24,15 +28,26 @@ export const summary = adminQuery({
     return {
       today,
       attendance: { working: working.length, marked },
-      dueSoon: open.filter((r) => r.dueDate >= today && r.dueDate <= weekEnd && !r.overdue),
+      dueSoon: open.filter(
+        (r) => r.dueDate >= today && r.dueDate <= weekEnd && !r.overdue,
+      ),
       overdue: open.filter((r) => r.overdue),
       totalOwed: entries.reduce((a, { schedule }) => a + schedule.pending, 0),
       reservesHeld: entries
-        .filter(({ staff }) => staff.status === "active" && staff.reserveStatus === "held")
+        .filter(
+          ({ staff }) =>
+            staff.status === "active" && staff.reserveStatus === "held",
+        )
         .reduce((a, { schedule }) => a + schedule.reserve.amount, 0),
-      activeStaff: entries.filter(({ staff }) => staff.status === "active").length,
+      activeStaff: entries.filter(({ staff }) => staff.status === "active")
+        .length,
       settlementsWaiting: entries
-        .filter(({ staff }) => staff.status === "active" && staff.lastWorkingDay !== undefined && staff.lastWorkingDay <= today)
+        .filter(
+          ({ staff }) =>
+            staff.status === "active" &&
+            staff.lastWorkingDay !== undefined &&
+            staff.lastWorkingDay <= today,
+        )
         .map(({ staff, schedule }) => ({
           staffId: staff._id,
           name: staff.name,

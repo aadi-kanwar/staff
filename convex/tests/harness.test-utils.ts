@@ -13,9 +13,15 @@ export const modules = import.meta.glob("../**/*.ts");
 /** Keys Convex Auth needs to issue login tokens inside tests. */
 async function configureAuthEnv() {
   if (process.env.JWT_PRIVATE_KEY) return;
-  const { privateKey, publicKey } = await generateKeyPair("RS256", { extractable: true });
-  process.env.JWT_PRIVATE_KEY = (await exportPKCS8(privateKey)).trimEnd().replace(/\n/g, " ");
-  process.env.JWKS = JSON.stringify({ keys: [{ use: "sig", ...(await exportJWK(publicKey)) }] });
+  const { privateKey, publicKey } = await generateKeyPair("RS256", {
+    extractable: true,
+  });
+  process.env.JWT_PRIVATE_KEY = (await exportPKCS8(privateKey))
+    .trimEnd()
+    .replace(/\n/g, " ");
+  process.env.JWKS = JSON.stringify({
+    keys: [{ use: "sig", ...(await exportJWK(publicKey)) }],
+  });
   process.env.CONVEX_SITE_URL = "https://test.convex.site";
   process.env.SITE_URL = "http://localhost:3000";
 }
@@ -43,15 +49,33 @@ export function nextPhone() {
 /** A client signed in as `userId` (a fresh session). */
 export async function signedInAs(t: T, userId: Id<"users">) {
   const sessionId = await t.run(async (ctx) =>
-    ctx.db.insert("authSessions", { userId, expirationTime: Date.now() + 3_600_000 }),
+    ctx.db.insert("authSessions", {
+      userId,
+      expirationTime: Date.now() + 3_600_000,
+    }),
   );
   return t.withIdentity({ subject: `${userId}|${sessionId}` });
 }
 
-export async function createAdmin(t: T, name = "Test Admin") {
+/** An admin who has set up their organisation (through the real mutation) with one property. */
+export async function createAdmin(
+  t: T,
+  name = "Test Admin",
+  organizationName = "Test Organisation",
+) {
   const phone = nextPhone();
-  const userId = await t.run(async (ctx) => ctx.db.insert("users", { phone, role: "admin", name }));
-  return { userId, phone, as: await signedInAs(t, userId) };
+  const userId = await t.run(async (ctx) =>
+    ctx.db.insert("users", { phone, role: "admin", name }),
+  );
+  const as = await signedInAs(t, userId);
+  const { organizationId, propertyId } = await as.mutation(
+    api.organization.create,
+    {
+      name: organizationName,
+      propertyName: "Main PG",
+    },
+  );
+  return { userId, phone, as, organizationId, propertyId };
 }
 
 export type Admin = Awaited<ReturnType<typeof createAdmin>>;
@@ -59,6 +83,7 @@ export type Admin = Awaited<ReturnType<typeof createAdmin>>;
 export const PASSWORD = "plain-tea-42";
 
 type NewStaff = Partial<{
+  propertyId: Id<"properties">;
   name: string;
   department: string;
   joinDate: string;
@@ -66,13 +91,22 @@ type NewStaff = Partial<{
   payMode: "monthly_10th" | "half_16day";
   paidUpToIndex: number;
   reserveStatus: "held" | "released" | "forfeited";
-  opening: { type: "advance" | "deduction" | "bonus"; amount: number; note: string };
+  opening: {
+    type: "advance" | "deduction" | "bonus";
+    amount: number;
+    note: string;
+  };
 }>;
 
 /** A staff member created through the real admin action, already past the first-login password change. */
-export async function createStaffMember(t: T, admin: Admin, details: NewStaff = {}) {
+export async function createStaffMember(
+  t: T,
+  admin: Admin,
+  details: NewStaff = {},
+) {
   const phone = nextPhone();
   const { staffId } = await admin.as.action(api.people.create, {
+    propertyId: details.propertyId ?? admin.propertyId,
     name: details.name ?? "Test Staff",
     phone,
     department: details.department ?? "Kitchen",
@@ -99,7 +133,8 @@ export async function errorCode(promise: Promise<unknown>): Promise<string> {
     return "NO_ERROR";
   } catch (error) {
     const data = (error as { data?: unknown }).data;
-    if (data && typeof data === "object" && "code" in data) return String(data.code);
+    if (data && typeof data === "object" && "code" in data)
+      return String(data.code);
     return `UNEXPECTED: ${(error as Error).message}`;
   }
 }

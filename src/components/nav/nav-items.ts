@@ -1,6 +1,7 @@
 import {
   CalendarCheck,
   CalendarDays,
+  FileDown,
   House,
   IndianRupee,
   LayoutDashboard,
@@ -24,6 +25,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/admin/staff", label: "Staff", icon: Users },
   { href: "/admin/payroll", label: "Payroll", icon: IndianRupee },
+  { href: "/admin/reports", label: "Reports", icon: FileDown, mobile: false },
   { href: "/admin/settings", label: "Settings", icon: Settings, mobile: false },
 ];
 

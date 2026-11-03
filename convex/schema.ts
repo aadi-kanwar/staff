@@ -5,6 +5,7 @@ import {
   vAdjustmentType,
   vAttendanceStatus,
   vPayMode,
+  vRecordStatus,
   vReserveStatus,
   vRole,
   vStaffStatus,
@@ -26,9 +27,29 @@ import {
  *
  * Dates are real dates "YYYY-MM-DD" in Asia/Kolkata; "...Index" fields are
  * days on the 30-day company calendar (convex/lib/companyCalendar.ts).
+ *
+ * As in MealSync, an organisation (one per Admin) has one or more
+ * properties. Every staff member belongs to one property of one
+ * organisation; an admin sees every property of their organisation and
+ * nothing of any other. Rows that hang off a staff member (terms,
+ * attendance, adjustments, payments) reach the organisation through it.
  */
 export default defineSchema({
   ...authTables,
+
+  organizations: defineTable({
+    name: v.string(),
+    status: vRecordStatus,
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+  }),
+
+  properties: defineTable({
+    organizationId: v.id("organizations"),
+    name: v.string(), // unique within the organisation (case-insensitive)
+    status: vRecordStatus,
+    createdAt: v.number(),
+  }).index("by_org_status", ["organizationId", "status"]),
 
   // Convex Auth's users table, plus who the account belongs to.
   users: defineTable({
@@ -41,15 +62,20 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     // Absent until the account is set up by an admin (or the first-admin script).
     role: v.optional(vRole),
+    /** The organisation the account belongs to. Absent for an admin who hasn't set one up yet. */
+    organizationId: v.optional(v.id("organizations")),
     /** Set when an admin created the account or reset its password. */
     mustChangePassword: v.optional(v.boolean()),
     disabled: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
-    .index("by_role", ["role"]),
+    .index("by_role", ["role"])
+    .index("by_org_role", ["organizationId", "role"]),
 
   staff: defineTable({
+    organizationId: v.id("organizations"),
+    propertyId: v.id("properties"), // a property of organizationId
     userId: v.id("users"), // unique
     name: v.string(),
     phone: v.string(), // E.164, same as the login
@@ -66,7 +92,8 @@ export default defineSchema({
     exitedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_status", ["status"])
+    .index("by_org", ["organizationId"])
+    .index("by_property", ["propertyId"])
     .index("by_phone", ["phone"]),
 
   // Salary history. The earliest row is the terms at joining (it fixes the
@@ -93,6 +120,7 @@ export default defineSchema({
 
   // Append-only: every change to attendance, never edited or deleted.
   attendanceLog: defineTable({
+    organizationId: v.optional(v.id("organizations")),
     staffId: v.id("staff"),
     date: v.string(),
     oldStatus: v.union(vAttendanceStatus, v.null()), // null: the day had no mark yet
@@ -100,7 +128,7 @@ export default defineSchema({
     changedBy: v.id("users"),
     changedAt: v.number(),
   })
-    .index("by_changedAt", ["changedAt"])
+    .index("by_org_changedAt", ["organizationId", "changedAt"])
     .index("by_staff_changedAt", ["staffId", "changedAt"]),
 
   adjustments: defineTable({
@@ -139,6 +167,7 @@ export default defineSchema({
   // Append-only log of admin actions: salary revisions, mode changes,
   // payments, exits, forfeits... Never store passwords or tokens here.
   auditLog: defineTable({
+    organizationId: v.optional(v.id("organizations")), // absent for setup steps outside any organisation
     actorUserId: v.optional(v.id("users")), // absent for setup steps run from the CLI
     action: v.string(),
     entityType: v.string(),
@@ -147,6 +176,6 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.number(),
   })
-    .index("by_createdAt", ["createdAt"])
+    .index("by_org_createdAt", ["organizationId", "createdAt"])
     .index("by_staff_createdAt", ["staffId", "createdAt"]),
 });

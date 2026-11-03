@@ -16,7 +16,12 @@ import { v } from "convex/values";
 import { isoDate, parseIsoDate, realDatesOfMonth } from "./lib/companyCalendar";
 import { appError } from "./lib/errors";
 import { staffQuery } from "./lib/functions";
-import { ATTENDANCE_STATUSES, type AttendanceStatus, type Payday, type Schedule } from "./lib/payroll";
+import {
+  ATTENDANCE_STATUSES,
+  type AttendanceStatus,
+  type Payday,
+  type Schedule,
+} from "./lib/payroll";
 import { scheduleFor, worksOn } from "./lib/staffData";
 import { monthOf, todayInIndia } from "./lib/time";
 
@@ -32,22 +37,48 @@ const MODE_LABELS: Record<string, string> = {
 
 function adjustmentLines(adjustments: Payday["adjustments"]): Line[] {
   return adjustments.map((a) => {
-    const label = a.type === "bonus" ? "Bonus" : a.type === "deduction" ? "Deduction" : "Advance recovered";
-    return { label: a.note ? `${label}: ${a.note}` : label, amount: a.type === "bonus" ? a.amount : -a.amount };
+    const label =
+      a.type === "bonus"
+        ? "Bonus"
+        : a.type === "deduction"
+          ? "Deduction"
+          : "Advance recovered";
+    return {
+      label: a.note ? `${label}: ${a.note}` : label,
+      amount: a.type === "bonus" ? a.amount : -a.amount,
+    };
   });
 }
 
 function paymentRows(payments: Payday["payments"]) {
   return [...payments]
     .sort((a, b) => a.paidOn.localeCompare(b.paidOn))
-    .map((p) => ({ paidOn: p.paidOn, amount: p.amount, method: MODE_LABELS[p.mode] ?? "Other", note: p.note ?? null }));
+    .map((p) => ({
+      paidOn: p.paidOn,
+      amount: p.amount,
+      method: MODE_LABELS[p.mode] ?? "Other",
+      note: p.note ?? null,
+    }));
 }
 
 /** One payday as staff see it: when, how much, whether paid, and plain line items. */
 function paydayView(p: Payday, n: number) {
-  const lines: Line[] = [{ label: p.isFinal ? "Earnings (final days)" : "Earnings", amount: p.fullEarning }];
-  if (p.tally.counts.absent > 0) lines.push({ label: `Absent × ${p.tally.counts.absent}`, amount: -p.absentDeduction });
-  if (p.tally.counts.half_day > 0) lines.push({ label: `Half-day × ${p.tally.counts.half_day}`, amount: -p.halfDayDeduction });
+  const lines: Line[] = [
+    {
+      label: p.isFinal ? "Earnings (final days)" : "Earnings",
+      amount: p.fullEarning,
+    },
+  ];
+  if (p.tally.counts.absent > 0)
+    lines.push({
+      label: `Absent × ${p.tally.counts.absent}`,
+      amount: -p.absentDeduction,
+    });
+  if (p.tally.counts.half_day > 0)
+    lines.push({
+      label: `Half-day × ${p.tally.counts.half_day}`,
+      amount: -p.halfDayDeduction,
+    });
   lines.push(...adjustmentLines(p.adjustments));
   return {
     id: `payday-${n}`,
@@ -65,10 +96,17 @@ function paydayView(p: Payday, n: number) {
 function settlementView(schedule: Schedule, today: string) {
   const s = schedule.settlement!;
   const lines: Line[] = [];
-  if (s.reserveIncluded) lines.push({ label: "Joining Reserve", amount: s.reserveAmount });
+  if (s.reserveIncluded)
+    lines.push({ label: "Joining Reserve", amount: s.reserveAmount });
   lines.push(...adjustmentLines(s.unsettledAdjustments));
   const status: StaffStatusLabel =
-    s.extrasOutstanding <= 0 ? "paid" : s.extrasPaid > 0 ? "partially_paid" : s.dueDate > today ? "upcoming" : "due";
+    s.extrasOutstanding <= 0
+      ? "paid"
+      : s.extrasPaid > 0
+        ? "partially_paid"
+        : s.dueDate > today
+          ? "upcoming"
+          : "due";
   return {
     id: "final-settlement",
     title: "Final settlement",
@@ -85,9 +123,11 @@ function settlementView(schedule: Schedule, today: string) {
 function reserveView(schedule: Schedule, forfeitReason: string | undefined) {
   return {
     label: "Joining Reserve (paid when you leave)",
-    amount: schedule.reserve.status === "forfeited" ? 0 : schedule.reserve.amount,
+    amount:
+      schedule.reserve.status === "forfeited" ? 0 : schedule.reserve.amount,
     status: schedule.reserve.status,
-    note: schedule.reserve.status === "forfeited" ? (forfeitReason ?? null) : null,
+    note:
+      schedule.reserve.status === "forfeited" ? (forfeitReason ?? null) : null,
   };
 }
 
@@ -105,12 +145,17 @@ export const home = staffQuery({
       lastWorkingDay: staff.lastWorkingDay ?? null,
       today,
       next:
-        staff.status === "active" && schedule.next ? { date: schedule.next.dueDate, amount: schedule.next.net } : null,
+        staff.status === "active" && schedule.next
+          ? { date: schedule.next.dueDate, amount: schedule.next.net }
+          : null,
       pending: Math.max(schedule.pending, 0),
       reserve: reserveView(schedule, staff.reserveForfeitReason),
       finalSettlement:
         settlement && staff.status === "active"
-          ? { date: settlement.dueDate, amount: Math.max(settlement.totalOutstanding, 0) }
+          ? {
+              date: settlement.dueDate,
+              amount: Math.max(settlement.totalOutstanding, 0),
+            }
           : null,
     };
   },
@@ -123,10 +168,14 @@ export const payments = staffQuery({
     const staff = ctx.self.staff;
     const today = todayInIndia();
     const schedule = await scheduleFor(ctx, staff, today, 1);
-    const shown = schedule.paydays.filter((p) => p.dueDate <= today || p === schedule.next);
+    const shown = schedule.paydays.filter(
+      (p) => p.dueDate <= today || p === schedule.next,
+    );
     const rows = shown.map((p, i) => paydayView(p, i + 1));
     if (schedule.settlement) rows.push(settlementView(schedule, today));
-    const upcoming = rows.filter((r) => r.date > today).sort((x, y) => x.date.localeCompare(y.date));
+    const upcoming = rows
+      .filter((r) => r.date > today)
+      .sort((x, y) => x.date.localeCompare(y.date));
     const past = rows.filter((r) => r.date <= today).reverse();
     return {
       paydays: [...upcoming, ...past],
@@ -135,7 +184,11 @@ export const payments = staffQuery({
   },
 });
 
-const emptyCounts = () => Object.fromEntries(ATTENDANCE_STATUSES.map((s) => [s, 0])) as Record<AttendanceStatus, number>;
+const emptyCounts = () =>
+  Object.fromEntries(ATTENDANCE_STATUSES.map((s) => [s, 0])) as Record<
+    AttendanceStatus,
+    number
+  >;
 
 /** The months that have attendance (plus the current month while working), newest first. */
 export const attendanceMonths = staffQuery({
@@ -148,7 +201,8 @@ export const attendanceMonths = staffQuery({
       .collect();
     const months = new Set(marks.map((m) => monthOf(m.date)));
     const today = todayInIndia();
-    if (staff.status === "active" && today >= staff.joinDate) months.add(monthOf(today));
+    if (staff.status === "active" && today >= staff.joinDate)
+      months.add(monthOf(today));
     return [...months].sort().reverse();
   },
 });
@@ -163,7 +217,10 @@ export const attendanceMonth = staffQuery({
     const marks = await ctx.db
       .query("attendance")
       .withIndex("by_staff_date", (q) =>
-        q.eq("staffId", staff._id).gte("date", isoDate(y, m, 1)).lte("date", isoDate(y, m, 31)),
+        q
+          .eq("staffId", staff._id)
+          .gte("date", isoDate(y, m, 1))
+          .lte("date", isoDate(y, m, 31)),
       )
       .collect();
     const byDate = new Map(marks.map((mark) => [mark.date, mark.status]));
@@ -185,9 +242,11 @@ export const profile = staffQuery({
   args: {},
   handler: async (ctx) => {
     const staff = ctx.self.staff;
+    const property = await ctx.db.get(staff.propertyId);
     return {
       name: staff.name,
       phone: staff.phone,
+      property: property?.name ?? "",
       department: staff.department,
       joinDate: staff.joinDate,
       status: staff.status,

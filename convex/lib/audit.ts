@@ -19,7 +19,12 @@ export type AuditAction =
   | "exit.cancelled"
   | "exit.settled"
   | "reserve.forfeited"
-  | "reserve.restored";
+  | "reserve.restored"
+  | "organization.created"
+  | "organization.renamed"
+  | "property.added"
+  | "property.renamed"
+  | "report.exported";
 
 /**
  * Appends one entry to the admin audit log. Never put passwords, tokens or
@@ -28,6 +33,8 @@ export type AuditAction =
 export async function writeAudit(
   ctx: Pick<MutationCtx, "db">,
   entry: {
+    /** The organisation the action belongs to (undefined only for setup outside any organisation). */
+    organizationId: Id<"organizations"> | undefined;
     actorUserId: Id<"users"> | undefined;
     action: AuditAction;
     entityType: string;

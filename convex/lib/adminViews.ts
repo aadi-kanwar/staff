@@ -11,6 +11,7 @@ export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
     staffId: staff._id,
     name: staff.name,
     department: staff.department,
+    propertyId: staff.propertyId,
     key: p.key,
     dueDate: p.dueDate,
     payModeLabel: PAY_MODE_LABELS[p.payMode],
@@ -38,13 +39,18 @@ export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
 
 export type PaydayRow = ReturnType<typeof paydayRow>;
 
-export function settlementRow(staff: Doc<"staff">, schedule: Schedule, today: string) {
+export function settlementRow(
+  staff: Doc<"staff">,
+  schedule: Schedule,
+  today: string,
+) {
   const s = schedule.settlement!;
   return {
     kind: "final" as const,
     staffId: staff._id,
     name: staff.name,
     department: staff.department,
+    propertyId: staff.propertyId,
     key: s.key,
     dueDate: s.dueDate,
     reserveAmount: s.reserveAmount,
@@ -52,7 +58,12 @@ export function settlementRow(staff: Doc<"staff">, schedule: Schedule, today: st
     net: s.extrasNet,
     paid: s.extrasPaid,
     outstanding: s.extrasOutstanding,
-    status: s.extrasOutstanding <= 0 ? ("paid" as const) : s.extrasPaid > 0 ? ("partially_paid" as const) : ("due" as const),
+    status:
+      s.extrasOutstanding <= 0
+        ? ("paid" as const)
+        : s.extrasPaid > 0
+          ? ("partially_paid" as const)
+          : ("due" as const),
     overdue: s.dueDate < today && s.extrasOutstanding > 0,
   };
 }
@@ -60,12 +71,18 @@ export function settlementRow(staff: Doc<"staff">, schedule: Schedule, today: st
 export type SettlementRow = ReturnType<typeof settlementRow>;
 
 /** Everyone's schedules (active staff, and leavers with anything left to settle). */
-export async function allSchedules(ctx: Pick<QueryCtx, "db">, today: string) {
+export async function allSchedules(
+  ctx: Pick<QueryCtx, "db">,
+  admin: Parameters<typeof allStaff>[1],
+  today: string,
+) {
   const result: { staff: Doc<"staff">; schedule: Schedule }[] = [];
-  for (const staff of await allStaff(ctx)) {
+  for (const staff of await allStaff(ctx, admin)) {
     const schedule = await scheduleFor(ctx, staff, today, 2);
     if (staff.status === "exited") {
-      const owed = schedule.paydays.some((p) => p.outstanding !== 0) || (schedule.settlement?.extrasOutstanding ?? 0) !== 0;
+      const owed =
+        schedule.paydays.some((p) => p.outstanding !== 0) ||
+        (schedule.settlement?.extrasOutstanding ?? 0) !== 0;
       if (!owed) continue;
     }
     result.push({ staff, schedule });
@@ -74,7 +91,11 @@ export async function allSchedules(ctx: Pick<QueryCtx, "db">, today: string) {
 }
 
 /** Paydays not fully paid that are due, or due within `days`. */
-export function openPaydays(entries: { staff: Doc<"staff">; schedule: Schedule }[], today: string, days: number) {
+export function openPaydays(
+  entries: { staff: Doc<"staff">; schedule: Schedule }[],
+  today: string,
+  days: number,
+) {
   const until = addRealDays(today, days);
   const rows: (PaydayRow | SettlementRow)[] = [];
   for (const { staff, schedule } of entries) {
@@ -82,7 +103,11 @@ export function openPaydays(entries: { staff: Doc<"staff">; schedule: Schedule }
       if (p.status === "paid" || p.dueDate > until) continue;
       rows.push(paydayRow(staff, p, today));
     }
-    if (schedule.settlement && schedule.settlement.extrasOutstanding !== 0) rows.push(settlementRow(staff, schedule, today));
+    if (schedule.settlement && schedule.settlement.extrasOutstanding !== 0)
+      rows.push(settlementRow(staff, schedule, today));
   }
-  return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name));
+  return rows.sort(
+    (a, b) =>
+      a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name),
+  );
 }

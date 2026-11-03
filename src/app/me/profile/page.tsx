@@ -25,9 +25,17 @@ export default function StaffProfile() {
             rows={[
               { label: "Name", value: data.name },
               { label: "Mobile", value: formatPhoneForDisplay(data.phone) },
+              { label: "Property", value: data.property },
               { label: "Department", value: data.department },
               { label: "Joined", value: formatDate(data.joinDate) },
-              ...(data.lastWorkingDay ? [{ label: "Last working day", value: formatDate(data.lastWorkingDay) }] : []),
+              ...(data.lastWorkingDay
+                ? [
+                    {
+                      label: "Last working day",
+                      value: formatDate(data.lastWorkingDay),
+                    },
+                  ]
+                : []),
             ]}
           />
         </CardBody>
@@ -41,7 +49,9 @@ export default function StaffProfile() {
         </Button>
         <SignOutButton variant="secondary" full />
       </div>
-      <p className="text-sm text-foreground-secondary">Forgot your password? Ask the office to reset it.</p>
+      <p className="text-sm text-foreground-secondary">
+        Forgot your password? Ask the office to reset it.
+      </p>
     </>
   );
 }

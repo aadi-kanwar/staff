@@ -20,7 +20,10 @@ export async function recordSettlement(
   const now = Date.now();
   let total = 0;
   const lines = [
-    ...schedule.paydays.map((p) => ({ key: p.key, outstanding: p.outstanding })),
+    ...schedule.paydays.map((p) => ({
+      key: p.key,
+      outstanding: p.outstanding,
+    })),
     { key: settlement.key, outstanding: settlement.extrasOutstanding },
   ];
   for (const line of lines) {
@@ -37,9 +40,15 @@ export async function recordSettlement(
     });
     total += line.outstanding;
   }
-  const reserveStatus = staff.reserveStatus === "held" ? "released" : staff.reserveStatus;
-  await ctx.db.patch(staff._id, { status: "exited", exitedAt: now, reserveStatus });
+  const reserveStatus =
+    staff.reserveStatus === "held" ? "released" : staff.reserveStatus;
+  await ctx.db.patch(staff._id, {
+    status: "exited",
+    exitedAt: now,
+    reserveStatus,
+  });
   await writeAudit(ctx, {
+    organizationId: staff.organizationId,
     actorUserId: actor,
     action: "exit.settled",
     entityType: "staff",

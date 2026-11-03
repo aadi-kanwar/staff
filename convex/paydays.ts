@@ -9,12 +9,18 @@ export const overview = adminQuery({
   handler: async (ctx, args) => {
     const today = todayInIndia();
     const days = Math.min(Math.max(args.days ?? 31, 0), 120);
-    const rows = openPaydays(await allSchedules(ctx, today), today, days);
+    const rows = openPaydays(
+      await allSchedules(ctx, ctx.admin, today),
+      today,
+      days,
+    );
     return {
       today,
       days,
       rows,
-      dueNow: rows.filter((r) => r.dueDate <= today).reduce((a, r) => a + r.outstanding, 0),
+      dueNow: rows
+        .filter((r) => r.dueDate <= today)
+        .reduce((a, r) => a + r.outstanding, 0),
     };
   },
 });

@@ -8,13 +8,46 @@ Built on the same stack, tooling and design system as **MealSync** (Dine):
 Next.js 16, Convex (database, functions, auth), Tailwind 4 with MealSync's
 tokens, its UI components, Vitest + convex-test.
 
+## Organisations and properties (as in MealSync)
+
+- An admin's **organisation** is their business; it has one or more
+  **properties** (PGs). The first time an admin signs in they name their
+  organisation and its first property. More properties are added (and
+  renamed) in **Settings → Organisation**.
+- **Every staff member belongs to one property**: chosen when adding them,
+  shown on their profile (and on the staff member's own Profile screen), and
+  changeable from **Edit** on their profile. Moving someone doesn't change
+  their pay or history.
+- With more than one property, the header has a picker: **All properties**
+  or one property. Dashboard, Attendance, Staff, Payroll, Reports and the
+  password-reset list show the chosen property, or all of them with each
+  row naming its property. The choice is remembered on that device.
+- Organisations are completely separate: an admin never sees another
+  organisation's staff, properties, attendance, money or logs
+  (`convex/tests/organizations.test.ts`).
+
+## Reports
+
+**Reports** (`/admin/reports`) downloads a spreadsheet (CSV, opens in Excel or
+Google Sheets) for a date range, for the property chosen at the top (or all),
+and for everyone or one staff member. A preview of the totals shows first.
+
+| Report | One row per | Longest range |
+| --- | --- | --- |
+| Attendance summary | person: working days, Present, Half-day, Absent, Paid leave, Week-off, not marked | 366 days |
+| Attendance (day by day) | person per working day, with the mark | 100 days |
+| Paydays | payday due in the range: cycle, paid days, earned, bonus, deductions, advance, net, paid, still owed | 366 days |
+| Payments made | payment with a payment date in the range: amount, mode, which payday | 366 days |
+
+Every download is written to the audit log.
+
 ## Screens
 
 **Admin** (`/admin`): Dashboard · Attendance (daily one-tap grid, per-person
 month, change log) · Staff (list, add, detail with Profile, Salary terms,
 Paydays, Ledger, Attendance, Joining Reserve, Exit) · Payroll (due and
-upcoming paydays, pay several at once) · Settings (own account, staff
-password resets).
+upcoming paydays, pay several at once) · Reports (CSV downloads) · Settings
+(organisation and properties, own account, staff password resets).
 
 **Staff** (`/me`, phone-first): Home (next payday, amount pending, Joining
 Reserve) · Attendance calendar · Payments · Profile (change password).
@@ -34,10 +67,13 @@ Reserve) · Attendance calendar · Payments · Profile (change password).
    ```
    Or set `FIRST_ADMIN_PHONE`, `FIRST_ADMIN_PASSWORD`, `FIRST_ADMIN_NAME` on the
    deployment and run `npx convex run setup:createFirstAdmin` with no arguments.
-   It works once; later admins/staff are added inside the app.
+   It works once; later admins/staff are added inside the app. At their first
+   sign-in the admin names their organisation and first property.
 4. Sample data (development only): set `STAFF_ALLOW_DEV_SEED=true` and
    `DEV_SEED_PASSWORD` on the deployment, then `npx convex run seed:dev`.
    Admin `9000000001`; staff `9000000002`–`9000000005` (see `convex/seed.ts`).
+   If the admin has no organisation yet, "Sample organisation" is created with
+   two properties, North PG and South PG.
 
 ## How pay works (admin knowledge only)
 
@@ -68,7 +104,9 @@ Reserve) · Attendance calendar · Payments · Profile (change password).
 ## Security model (as MealSync)
 
 Only `convex/lib/functions.ts` may use Convex's raw builders; everything else
-uses `viewerQuery`, `signedInAction`, `adminQuery/Mutation/Action`,
+uses `viewerQuery`, `signedInAction`, `adminQuery/Mutation/Action` (scoped to
+the admin's organisation; an optional `propertyId` narrows a screen to one
+property), `orgSetupQuery/Mutation` (creating the organisation only),
 `staffQuery` (own data only, no staff id argument) or internal wrappers
 (enforced by ESLint and a test). `attendanceLog` and `auditLog` are
 append-only. No self sign-up; failed sign-ins are rate-limited.

@@ -3,11 +3,24 @@
 import type { Id } from "@convex/_generated/dataModel";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { Suspense } from "react";
 import { api } from "@convex/_generated/api";
 import { formatPhoneForDisplay } from "@convex/lib/inputRules";
-import { ExitTab, LedgerTab, PaydaysTab, ProfileTab, ReserveTab, SalaryTab, AttendanceTab } from "@/components/admin/staff-tabs";
+import {
+  ExitTab,
+  LedgerTab,
+  PaydaysTab,
+  ProfileTab,
+  ReserveTab,
+  SalaryTab,
+  AttendanceTab,
+} from "@/components/admin/staff-tabs";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
@@ -58,6 +71,7 @@ function StaffDetail() {
       <PageHeader
         title={profile.name}
         description={[
+          profile.propertyName,
           profile.department,
           formatPhoneForDisplay(profile.phone),
           `joined ${formatDay(profile.joinDate, "d MMM yyyy")}`,
@@ -67,14 +81,30 @@ function StaffDetail() {
           .join(" · ")}
       />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Owed now" value={formatINR(schedule.pending)} emphasis={schedule.pending > 0} />
+        <Stat
+          label="Owed now"
+          value={formatINR(schedule.pending)}
+          emphasis={schedule.pending > 0}
+        />
         <Stat
           label="Next payday"
           value={schedule.next ? formatINR(schedule.next.net) : "—"}
-          hint={schedule.next ? formatDay(schedule.next.dueDate, "EEE d MMM") : undefined}
+          hint={
+            schedule.next
+              ? formatDay(schedule.next.dueDate, "EEE d MMM")
+              : undefined
+          }
         />
-        <Stat label="Salary" value={formatINR(data.current.monthlySalary)} hint={`per month · ${data.current.payModeLabel}`} />
-        <Stat label="Joining Reserve" value={formatINR(schedule.reserve.amount)} hint={profile.reserveStatus} />
+        <Stat
+          label="Salary"
+          value={formatINR(data.current.monthlySalary)}
+          hint={`per month · ${data.current.payModeLabel}`}
+        />
+        <Stat
+          label="Joining Reserve"
+          value={formatINR(schedule.reserve.amount)}
+          hint={profile.reserveStatus}
+        />
       </dl>
       <SegmentedTabs
         label="Staff record"

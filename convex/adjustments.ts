@@ -18,7 +18,11 @@ function openTarget(schedule: Schedule, key: string): boolean {
 }
 
 function requireActive(staff: Doc<"staff">) {
-  if (staff.status !== "active") throw appError("CONFLICT", "This person has left. Their record can't be changed.");
+  if (staff.status !== "active")
+    throw appError(
+      "CONFLICT",
+      "This person has left. Their record can't be changed.",
+    );
 }
 
 export const add = adminMutation({
@@ -31,16 +35,24 @@ export const add = adminMutation({
     paydayKey: v.string(),
   },
   handler: async (ctx, args) => {
-    const staff = await loadStaff(ctx, args.staffId);
+    const staff = await loadStaff(ctx, ctx.admin, args.staffId);
     requireActive(staff);
     const amount = amountSchema.safeParse(args.amount);
-    if (!amount.success) throw appError("INVALID_INPUT", amount.error.issues[0]?.message);
-    const note = noteSchema.min(1, "Add a note; staff will see it.").safeParse(args.note);
-    if (!note.success) throw appError("INVALID_INPUT", note.error.issues[0]?.message);
-    if (!isoDateSchema.safeParse(args.date).success) throw appError("INVALID_DATE");
+    if (!amount.success)
+      throw appError("INVALID_INPUT", amount.error.issues[0]?.message);
+    const note = noteSchema
+      .min(1, "Add a note; staff will see it.")
+      .safeParse(args.note);
+    if (!note.success)
+      throw appError("INVALID_INPUT", note.error.issues[0]?.message);
+    if (!isoDateSchema.safeParse(args.date).success)
+      throw appError("INVALID_DATE");
     const schedule = await scheduleFor(ctx, staff, todayInIndia());
     if (!openTarget(schedule, args.paydayKey)) {
-      throw appError("INVALID_INPUT", "Choose a payday that isn't fully paid yet.");
+      throw appError(
+        "INVALID_INPUT",
+        "Choose a payday that isn't fully paid yet.",
+      );
     }
     const adjustmentId = await ctx.db.insert("adjustments", {
       staffId: staff._id,
@@ -53,12 +65,18 @@ export const add = adminMutation({
       createdAt: Date.now(),
     });
     await writeAudit(ctx, {
+      organizationId: staff.organizationId,
       actorUserId: ctx.admin.userId,
       action: "adjustment.added",
       entityType: "adjustments",
       entityId: adjustmentId,
       staffId: staff._id,
-      metadata: { type: args.type, amount: amount.data, paydayKey: args.paydayKey, note: note.data },
+      metadata: {
+        type: args.type,
+        amount: amount.data,
+        paydayKey: args.paydayKey,
+        note: note.data,
+      },
     });
     return adjustmentId;
   },
@@ -69,19 +87,29 @@ export const remove = adminMutation({
   handler: async (ctx, { adjustmentId }) => {
     const adjustment = await ctx.db.get(adjustmentId);
     if (adjustment === null) throw appError("NOT_FOUND");
-    const staff = await loadStaff(ctx, adjustment.staffId);
+    const staff = await loadStaff(ctx, ctx.admin, adjustment.staffId);
     requireActive(staff);
     const schedule = await scheduleFor(ctx, staff, todayInIndia());
     const payday = schedule.paydays.find((p) => p.key === adjustment.paydayKey);
-    if (payday?.status === "paid") throw appError("CONFLICT", "That payday is already paid, so the adjustment can't be removed.");
+    if (payday?.status === "paid")
+      throw appError(
+        "CONFLICT",
+        "That payday is already paid, so the adjustment can't be removed.",
+      );
     await ctx.db.delete(adjustmentId);
     await writeAudit(ctx, {
+      organizationId: staff.organizationId,
       actorUserId: ctx.admin.userId,
       action: "adjustment.removed",
       entityType: "adjustments",
       entityId: adjustmentId,
       staffId: staff._id,
-      metadata: { type: adjustment.type, amount: adjustment.amount, paydayKey: adjustment.paydayKey, note: adjustment.note },
+      metadata: {
+        type: adjustment.type,
+        amount: adjustment.amount,
+        paydayKey: adjustment.paydayKey,
+        note: adjustment.note,
+      },
     });
     return null;
   },

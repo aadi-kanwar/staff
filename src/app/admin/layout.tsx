@@ -2,15 +2,24 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { OrganizationSetup } from "@/components/admin/organization-setup";
 import { AppFrame } from "@/components/app/app-frame";
 import { Brand } from "@/components/app/brand";
+import {
+  PropertyPicker,
+  PropertyScopeProvider,
+} from "@/components/app/property-scope";
 import { destinationFor, SignOutButton, useMe } from "@/components/app/session";
 import { ADMIN_NAV } from "@/components/nav/nav-items";
 import { BottomNav, StaffSidebar } from "@/components/nav/staff-nav";
 import { LoadingState } from "@/components/ui/skeleton";
 import { NotAuthorizedState } from "@/components/ui/states";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const me = useMe();
   const router = useRouter();
   useEffect(() => {
@@ -36,35 +45,47 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  if (me.organization === null) return <OrganizationSetup />;
+
   return (
-    <AppFrame
-      header={
-        <header className="border-b border-border bg-surface print:hidden">
-          <div className="flex h-14 items-center justify-between gap-3 px-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <Brand />
-              <span className="hidden truncate border-l border-border pl-3 text-xs text-foreground-secondary lg:block">
-                {me.name} (Admin)
-              </span>
+    <PropertyScopeProvider>
+      <AppFrame
+        header={
+          <header className="border-b border-border bg-surface print:hidden">
+            <div className="flex h-14 items-center justify-between gap-3 px-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Brand />
+                <span className="hidden truncate border-l border-border pl-3 text-xs text-foreground-secondary lg:block">
+                  {me.organization.name} · {me.name} (Admin)
+                </span>
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <PropertyPicker />
+                {/* On phones, Log out is in the bottom bar's More menu. */}
+                <span className="hidden md:block">
+                  <SignOutButton />
+                </span>
+              </div>
             </div>
-            {/* On phones, Log out is in the bottom bar's More menu. */}
-            <span className="hidden md:block">
-              <SignOutButton />
-            </span>
+          </header>
+        }
+        sidebar={<StaffSidebar items={ADMIN_NAV} />}
+        nav={
+          <BottomNav
+            items={ADMIN_NAV.filter((item) => item.mobile !== false)}
+            more={{
+              items: ADMIN_NAV.filter((item) => item.mobile === false),
+              footer: <SignOutButton variant="ghost" full />,
+            }}
+          />
+        }
+      >
+        <main className="px-4 pt-6 pb-10 md:px-8 print:p-0">
+          <div className="mx-auto flex max-w-5xl flex-col gap-6">
+            {children}
           </div>
-        </header>
-      }
-      sidebar={<StaffSidebar items={ADMIN_NAV} />}
-      nav={
-        <BottomNav
-          items={ADMIN_NAV.filter((item) => item.mobile !== false)}
-          more={{ items: ADMIN_NAV.filter((item) => item.mobile === false), footer: <SignOutButton variant="ghost" full /> }}
-        />
-      }
-    >
-      <main className="px-4 pt-6 pb-10 md:px-8 print:p-0">
-        <div className="mx-auto flex max-w-5xl flex-col gap-6">{children}</div>
-      </main>
-    </AppFrame>
+        </main>
+      </AppFrame>
+    </PropertyScopeProvider>
   );
 }

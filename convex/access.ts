@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalQuery, requireAdmin, requireUser } from "./lib/functions";
+import { internalQuery, requireAdminOrg, requireUser } from "./lib/functions";
 
 /**
  * Permission checks for actions (signedInAction / adminAction in
@@ -9,19 +9,30 @@ import { internalQuery, requireAdmin, requireUser } from "./lib/functions";
 
 export const viewerForAction = internalQuery({
   args: {},
-  returns: v.object({ userId: v.id("users"), phone: v.string(), mustChangePassword: v.boolean() }),
+  returns: v.object({
+    userId: v.id("users"),
+    phone: v.string(),
+    mustChangePassword: v.boolean(),
+  }),
   handler: async (ctx) => {
     const { userId, user } = await requireUser(ctx);
-    return { userId, phone: user.phone ?? "", mustChangePassword: user.mustChangePassword === true };
+    return {
+      userId,
+      phone: user.phone ?? "",
+      mustChangePassword: user.mustChangePassword === true,
+    };
   },
 });
 
 export const adminForAction = internalQuery({
   args: {},
-  returns: v.object({ userId: v.id("users") }),
+  returns: v.object({
+    userId: v.id("users"),
+    organizationId: v.id("organizations"),
+  }),
   handler: async (ctx) => {
-    const { userId } = await requireAdmin(ctx);
-    return { userId };
+    const { userId, organization } = await requireAdminOrg(ctx);
+    return { userId, organizationId: organization._id };
   },
 });
 

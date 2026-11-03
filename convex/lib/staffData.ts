@@ -1,19 +1,32 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { appError } from "./errors";
-import { computeSchedule, type AttendanceStatus, type EngineInput, type Schedule, type Terms } from "./payroll";
+import { inScope, type AdminViewer } from "./functions";
+import {
+  computeSchedule,
+  type AttendanceStatus,
+  type EngineInput,
+  type Schedule,
+  type Terms,
+} from "./payroll";
 import { todayInIndia } from "./time";
 
 type DbCtx = Pick<QueryCtx, "db">;
 
-export async function termsOf(ctx: DbCtx, staffId: Id<"staff">): Promise<Doc<"salaryTerms">[]> {
+export async function termsOf(
+  ctx: DbCtx,
+  staffId: Id<"staff">,
+): Promise<Doc<"salaryTerms">[]> {
   return await ctx.db
     .query("salaryTerms")
     .withIndex("by_staff_effective", (q) => q.eq("staffId", staffId))
     .collect();
 }
 
-export async function attendanceOf(ctx: DbCtx, staffId: Id<"staff">): Promise<Doc<"attendance">[]> {
+export async function attendanceOf(
+  ctx: DbCtx,
+  staffId: Id<"staff">,
+): Promise<Doc<"attendance">[]> {
   return await ctx.db
     .query("attendance")
     .withIndex("by_staff_date", (q) => q.eq("staffId", staffId))
@@ -84,24 +97,52 @@ export async function engineInputFor(
   };
 }
 
-export async function scheduleFor(ctx: DbCtx, staff: Doc<"staff">, today = todayInIndia(), upcoming?: number): Promise<Schedule> {
+export async function scheduleFor(
+  ctx: DbCtx,
+  staff: Doc<"staff">,
+  today = todayInIndia(),
+  upcoming?: number,
+): Promise<Schedule> {
   return computeSchedule(await engineInputFor(ctx, staff, today, upcoming));
 }
 
-export async function loadStaff(ctx: DbCtx, staffId: Id<"staff">): Promise<Doc<"staff">> {
+/**
+ * A staff member of the admin's organisation (any of its properties, not
+ * only the one chosen on screen). Anyone else's reads as NOT_FOUND.
+ */
+export async function loadStaff(
+  ctx: DbCtx,
+  admin: { organization: Pick<Doc<"organizations">, "_id"> },
+  staffId: Id<"staff">,
+): Promise<Doc<"staff">> {
   const staff = await ctx.db.get(staffId);
-  if (staff === null) throw appError("NOT_FOUND");
+  if (staff === null || staff.organizationId !== admin.organization._id)
+    throw appError("NOT_FOUND");
   return staff;
 }
 
-export async function allStaff(ctx: DbCtx): Promise<Doc<"staff">[]> {
-  const rows = await ctx.db.query("staff").collect();
-  return rows.sort((a, b) => a.name.localeCompare(b.name));
+/** Staff of the properties a screen covers (see inScope), by name. */
+export async function allStaff(
+  ctx: DbCtx,
+  admin: Pick<AdminViewer, "organization" | "property" | "properties">,
+): Promise<Doc<"staff">[]> {
+  const ids = new Set(inScope(admin).map((p) => p._id));
+  const rows = await ctx.db
+    .query("staff")
+    .withIndex("by_org", (q) => q.eq("organizationId", admin.organization._id))
+    .collect();
+  return rows
+    .filter((s) => ids.has(s.propertyId))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Is the person working on `date` (joined, and not past their last working day)? */
 export function worksOn(staff: Doc<"staff">, date: string): boolean {
   if (date < staff.joinDate) return false;
-  if (staff.lastWorkingDay !== undefined && date > staff.lastWorkingDay) return false;
-  return staff.status === "active" || (staff.lastWorkingDay !== undefined && date <= staff.lastWorkingDay);
+  if (staff.lastWorkingDay !== undefined && date > staff.lastWorkingDay)
+    return false;
+  return (
+    staff.status === "active" ||
+    (staff.lastWorkingDay !== undefined && date <= staff.lastWorkingDay)
+  );
 }

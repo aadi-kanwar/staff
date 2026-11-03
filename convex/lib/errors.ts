@@ -16,25 +16,32 @@ export type AppErrorCode =
   | "TOO_MANY_ATTEMPTS"
   | "INVALID_PHONE"
   | "WEAK_PASSWORD"
-  | "INVALID_DATE";
+  | "INVALID_DATE"
+  | "ORG_REQUIRED";
 
 export type AppErrorData = { code: AppErrorCode; message: string };
 
 export const DEFAULT_MESSAGES: Record<AppErrorCode, string> = {
   NOT_SIGNED_IN: "Please sign in to continue.",
   PASSWORD_CHANGE_REQUIRED: "Please choose a new password first.",
-  ACCOUNT_DISABLED: "This account has been switched off. Please contact the office.",
+  ACCOUNT_DISABLED:
+    "This account has been switched off. Please contact the office.",
   FORBIDDEN: "You don't have permission to do that.",
   NOT_FOUND: "We couldn't find that. It may have been removed.",
   INVALID_INPUT: "Some details aren't valid. Please check and try again.",
   CONFLICT: "That has already been done.",
-  SIGN_IN_FAILED: "That mobile number and password didn't work. Please check and try again.",
+  SIGN_IN_FAILED:
+    "That mobile number and password didn't work. Please check and try again.",
   TOO_MANY_ATTEMPTS: "Too many attempts. Please wait 15 minutes and try again.",
   INVALID_PHONE: "Enter a valid mobile number.",
   WEAK_PASSWORD: "Please choose a stronger password.",
   INVALID_DATE: "That date can't be used here.",
+  ORG_REQUIRED: "Set up your organisation first.",
 };
 
-export function appError(code: AppErrorCode, message?: string): ConvexError<AppErrorData> {
+export function appError(
+  code: AppErrorCode,
+  message?: string,
+): ConvexError<AppErrorData> {
   return new ConvexError({ code, message: message ?? DEFAULT_MESSAGES[code] });
 }
