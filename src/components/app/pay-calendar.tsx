@@ -2,92 +2,37 @@
 
 import type { FunctionReturnType } from "convex/server";
 import {
-  ChevronLeft,
-  ChevronRight,
-  CircleCheck,
+  CalendarClock,
   CircleAlert,
+  CircleCheck,
   Clock,
   PiggyBank,
-  CalendarClock,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { api } from "@convex/_generated/api";
-import { addRealDays } from "@convex/lib/companyCalendar";
-import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { DetailList } from "@/components/ui/stat";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { addMonths, formatDay, formatINR, formatMonth } from "@/lib/format";
+import { formatDay, formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import {
+  nextPeriodOf,
+  PayPeriodGrid,
+  PERIOD_STATE_TEXT,
+} from "./pay-period-grid";
 
 export type PayCalendarData = FunctionReturnType<typeof api.staff.payCalendar>;
 type Period = PayCalendarData["periods"][number];
 type State = Period["state"];
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/** Day tints per period state. Text always says the state too (legend, labels, details). */
-const TONE: Record<State | "reserve" | "next", string> = {
-  paid: "bg-success-subtle text-success border-success-border",
-  pending: "bg-danger-subtle text-danger-text border-danger-border",
-  next: "bg-info-subtle text-info border-info-border",
-  current: "bg-info-subtle text-info border-info-border",
-  upcoming:
-    "bg-surface text-foreground-secondary border-dashed border-border-strong",
-  reserve: "bg-muted text-foreground-secondary border-border",
-};
-
-type Absence = PayCalendarData["absences"][number]["kind"];
-const ABSENCE_SHORT: Record<Absence, string> = { absent: "A", half_day: "½" };
-const ABSENCE_TEXT: Record<Absence, string> = {
-  absent: "absent",
-  half_day: "on a half-day",
-};
-/** Solid badges so they read on any period colour. */
-const ABSENCE_BADGE: Record<Absence, string> = {
-  absent: "bg-danger",
-  half_day: "bg-warning",
-};
-
-const STATE_TEXT: Record<State, string> = {
-  paid: "Paid",
-  pending: "Pending",
-  current: "In progress",
-  upcoming: "Upcoming",
-};
-
-const mondayOffset = (date: string) =>
-  (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
-
-function datesOfMonth(month: string): string[] {
-  const dates: string[] = [];
-  for (let d = `${month}-01`; d.startsWith(month); d = addRealDays(d, 1))
-    dates.push(d);
-  return dates;
-}
-
-type Cell =
-  | { kind: "period"; period: Period; highlight: boolean }
-  | { kind: "reserve" }
-  | { kind: "none" };
-
 /**
- * Staff Home: a month calendar of pay periods. Paid periods are green and
- * struck through, pending ones red, and the period now running (or the next
- * one) is highlighted in blue. ₹ marks a payday. Tap a day for its period.
+ * Staff Home: the pay period calendar (see PayPeriodGrid) with the chosen
+ * period's amount, line items and payments below it.
  */
 export function PayCalendar({ data }: { data: PayCalendarData }) {
   const { periods, reserve, today } = data;
-  const absenceOn = useMemo(
-    () => new Map(data.absences.map((a) => [a.date, a.kind])),
-    [data.absences],
-  );
-  // The period to highlight: the one running now, else the next to come.
-  const next =
-    periods.find((p) => p.state === "current") ??
-    periods.find((p) => p.state === "upcoming") ??
-    null;
+  const next = nextPeriodOf(periods);
   const firstPending = periods.find((p) => p.state === "pending") ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(
     () => (firstPending ?? next)?.id ?? null,
@@ -96,227 +41,28 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
     selectedId === "reserve"
       ? "reserve"
       : (periods.find((p) => p.id === selectedId) ?? null);
-
-  const lastDate = periods.at(-1)?.period.to ?? today;
-  const firstMonth = reserve.period.from.slice(0, 7);
-  const lastMonth = (lastDate > today ? lastDate : today).slice(0, 7);
   const initialMonth =
     data.status === "exited" && data.lastWorkingDay
       ? data.lastWorkingDay.slice(0, 7)
       : today.slice(0, 7);
-  const [month, setMonth] = useState(initialMonth);
-
-  const cellOf = useMemo(() => {
-    return (date: string): Cell => {
-      if (date >= reserve.period.from && date <= reserve.period.to)
-        return { kind: "reserve" };
-      const period = periods.find(
-        (p) => date >= p.period.from && date <= p.period.to,
-      );
-      return period
-        ? { kind: "period", period, highlight: period === next }
-        : { kind: "none" };
-    };
-  }, [periods, reserve, next]);
-
-  const dates = datesOfMonth(month);
-  const blanks = mondayOffset(dates[0]);
-  const keyOf = (c: Cell) => (c.kind === "period" ? c.period.id : c.kind);
-
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardBody className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous month"
-              disabled={month <= firstMonth}
-              onClick={() => setMonth(addMonths(month, -1))}
-            >
-              <Icon icon={ChevronLeft} />
-            </Button>
-            <h2 className="font-serif text-xl" aria-live="polite">
-              {formatMonth(month)}
-            </h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next month"
-              disabled={month >= lastMonth}
-              onClick={() => setMonth(addMonths(month, 1))}
-            >
-              <Icon icon={ChevronRight} />
-            </Button>
-          </div>
-          <div
-            className="grid grid-cols-7 text-center text-xs font-medium text-foreground-secondary"
-            aria-hidden="true"
-          >
-            {WEEKDAYS.map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-          <ol
-            className="grid grid-cols-7 gap-y-1.5"
-            aria-label={`Pay periods in ${formatMonth(month)}`}
-          >
-            {Array.from({ length: blanks }, (_, i) => (
-              <li key={`blank-${i}`} aria-hidden="true" />
-            ))}
-            {dates.map((date) => {
-              const cell = cellOf(date);
-              const col = mondayOffset(date);
-              const key = keyOf(cell);
-              // Join days of the same period into one band (round only its ends and the week's edges).
-              const joinsLeft =
-                col > 0 &&
-                date > dates[0] &&
-                cell.kind !== "none" &&
-                keyOf(cellOf(addRealDays(date, -1))) === key;
-              const joinsRight =
-                col < 6 &&
-                date < dates[dates.length - 1] &&
-                cell.kind !== "none" &&
-                keyOf(cellOf(addRealDays(date, 1))) === key;
-              const isPayday =
-                cell.kind === "period" && cell.period.date === date;
-              const isSettlement = data.settlement?.date === date;
-              const absence = absenceOn.get(date);
-              const tone =
-                cell.kind === "reserve"
-                  ? TONE.reserve
-                  : cell.kind === "period"
-                    ? cell.highlight
-                      ? TONE.next
-                      : TONE[cell.period.state]
-                    : "border-transparent text-foreground-muted";
-              const isSelected =
-                (cell.kind === "period" &&
-                  selected !== "reserve" &&
-                  selected?.id === cell.period.id) ||
-                (cell.kind === "reserve" && selected === "reserve");
-              const n = Number(date.slice(8));
-              const label =
-                cell.kind === "reserve"
-                  ? `${formatDay(date, "d MMM")}: Joining Reserve`
-                  : cell.kind === "period"
-                    ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.period.from, "d MMM")} to ${formatDay(cell.period.period.to, "d MMM")}, ${STATE_TEXT[cell.period.state]}${isPayday ? ", payday" : ""}`
-                    : formatDay(date, "d MMM");
-              const fullLabel = absence
-                ? `${label}. You were ${ABSENCE_TEXT[absence]} this day`
-                : label;
-              const body = (
-                <>
-                  <span
-                    className={cn(
-                      "tabular text-sm",
-                      cell.kind === "period" &&
-                        cell.period.state === "paid" &&
-                        !cell.highlight &&
-                        "line-through decoration-2",
-                      date === today && "font-bold",
-                    )}
-                  >
-                    {n}
-                  </span>
-                  {isPayday || isSettlement ? (
-                    <span
-                      className="absolute top-0.5 right-1 text-[10px] leading-none font-bold"
-                      aria-hidden="true"
-                    >
-                      ₹
-                    </span>
-                  ) : null}
-                  {absence ? (
-                    <span
-                      className={cn(
-                        "flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] leading-none font-bold text-white",
-                        ABSENCE_BADGE[absence],
-                      )}
-                      aria-hidden="true"
-                    >
-                      {ABSENCE_SHORT[absence]}
-                    </span>
-                  ) : null}
-                </>
-              );
-              const classes = cn(
-                "relative flex h-11 w-full flex-col items-center justify-center gap-0.5 border-y leading-none transition-shadow",
-                tone,
-                joinsLeft ? "border-l-0" : "rounded-l-md border-l",
-                joinsRight ? "border-r-0" : "rounded-r-md border-r",
-                isPayday && "font-semibold",
-                date === today && "ring-2 ring-foreground ring-inset",
-                isSelected && "shadow-[inset_0_-3px_0_currentColor]",
-              );
-              return (
-                <li key={date}>
-                  {cell.kind === "none" ? (
-                    <div className={classes} aria-label={fullLabel} role="img">
-                      {body}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={classes}
-                      aria-label={fullLabel}
-                      aria-pressed={isSelected}
-                      onClick={() =>
-                        setSelectedId(
-                          cell.kind === "reserve" ? "reserve" : cell.period.id,
-                        )
-                      }
-                    >
-                      {body}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-          <ul
-            className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs text-foreground-secondary"
-            aria-label="Key"
-          >
-            <Legend className={TONE.paid}>Paid</Legend>
-            <Legend className={TONE.pending}>Pending</Legend>
-            <Legend className={TONE.next}>
-              {next?.state === "current" ? "This period" : "Next period"}
-            </Legend>
-            <Legend className={TONE.upcoming}>Later</Legend>
-            <Legend className={TONE.reserve}>Joining Reserve</Legend>
-            <li className="flex items-center gap-1.5">
-              <span className="font-bold text-foreground">₹</span> Payday
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white",
-                  ABSENCE_BADGE.absent,
-                )}
-                aria-hidden="true"
-              >
-                A
-              </span>
-              Absent
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white",
-                  ABSENCE_BADGE.half_day,
-                )}
-                aria-hidden="true"
-              >
-                ½
-              </span>
-              Half-day
-            </li>
-          </ul>
-        </CardBody>
-      </Card>
+      <PayPeriodGrid
+        periods={periods.map((p) => ({
+          id: p.id,
+          from: p.period.from,
+          to: p.period.to,
+          payday: p.date,
+          state: p.state,
+        }))}
+        reserve={reserve.period}
+        settlementDate={data.settlement?.date ?? null}
+        absences={data.absences}
+        today={today}
+        initialMonth={initialMonth}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
       {selected === "reserve" ? (
         <ReserveDetails reserve={reserve} />
       ) : selected ? (
@@ -330,24 +76,6 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
         />
       ) : null}
     </div>
-  );
-}
-
-function Legend({
-  className,
-  children,
-}: {
-  className: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <li className="flex items-center gap-1.5">
-      <span
-        className={cn("size-3.5 rounded-sm border", className)}
-        aria-hidden="true"
-      />
-      {children}
-    </li>
   );
 }
 
@@ -401,7 +129,7 @@ function PeriodDetails({
             </span>
           </div>
           <StatusBadge tone={badge.tone} icon={badge.icon}>
-            {STATE_TEXT[period.state]}
+            {PERIOD_STATE_TEXT[period.state]}
           </StatusBadge>
         </div>
         {absentDates.length > 0 || halfDates.length > 0 ? (

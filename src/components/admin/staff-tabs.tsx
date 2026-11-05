@@ -47,6 +47,13 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { toast } from "@/components/ui/toaster";
 import { useQuery } from "@/lib/convex";
+import { cn } from "@/lib/utils";
+import {
+  nextPeriodOf,
+  PayPeriodGrid,
+  periodStateOf,
+  type CalendarPeriod,
+} from "@/components/app/pay-period-grid";
 import { usePropertyScope } from "@/components/app/property-scope";
 import { friendlyError } from "@/lib/errors";
 import {
@@ -559,6 +566,40 @@ export function PaydaysTab({ data }: Props) {
     .filter((p) => p.dueDate <= data.today && !owed(p))
     .reverse();
   const rows = [...overdue, ...upcoming, ...past];
+
+  // The calendar above the cards: one band per payday's cycle.
+  const periods: CalendarPeriod[] = schedule.paydays.map((p) => ({
+    id: p.key,
+    from: p.cycleStartDate,
+    to: p.cycleEndDate,
+    payday: p.dueDate,
+    state: periodStateOf(
+      {
+        from: p.cycleStartDate,
+        payday: p.dueDate,
+        paid: p.paid,
+        outstanding: p.outstanding,
+      },
+      data.today,
+    ),
+  }));
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => overdue[0]?.key ?? nextPeriodOf(periods)?.id ?? null,
+  );
+  // Selecting a period on the calendar brings its card into view.
+  const select = (id: string, scroll: boolean) => {
+    setSelectedId(id);
+    if (!scroll) return;
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`payday-card-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+  const initialMonth =
+    profile.status === "exited" && profile.lastWorkingDay
+      ? profile.lastWorkingDay.slice(0, 7)
+      : data.today.slice(0, 7);
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -579,12 +620,44 @@ export function PaydaysTab({ data }: Props) {
           the Exit tab for the final settlement.
         </Banner>
       ) : null}
+      {rows.length > 0 ? (
+        <PayPeriodGrid
+          periods={periods}
+          reserve={{
+            from: schedule.reserve.startDate,
+            to: schedule.reserve.endDate,
+          }}
+          settlementDate={schedule.settlement?.dueDate ?? null}
+          absences={data.absences}
+          today={data.today}
+          initialMonth={initialMonth}
+          selectedId={selectedId}
+          onSelect={(id) => select(id, true)}
+        />
+      ) : null}
+      {selectedId === "reserve" ? (
+        <Banner tone="info" title="Joining Reserve">
+          {formatDate(schedule.reserve.startDate)} –{" "}
+          {formatDate(schedule.reserve.endDate)}:{" "}
+          {formatINR(schedule.reserve.amount)}, {schedule.reserve.status}. See
+          the Joining Reserve tab.
+        </Banner>
+      ) : null}
       {rows.length === 0 ? (
         <EmptyState title="No paydays yet" />
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((row) => (
-            <Card key={row.key}>
+            <Card
+              key={row.key}
+              id={`payday-card-${row.key}`}
+              className={cn(
+                "scroll-mt-20 transition-shadow",
+                selectedId === row.key &&
+                  "ring-2 ring-primary ring-offset-2 ring-offset-background",
+              )}
+              onClick={() => select(row.key, false)}
+            >
               <CardBody className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-col">
