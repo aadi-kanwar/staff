@@ -82,6 +82,10 @@ test("absent and half days are on the calendar; anything owed comes first in bot
     { date: "2027-04-03", kind: "absent" },
     { date: "2027-04-05", kind: "half_day" },
   ]);
+  // The admin's Paydays tab gets the same absences for its calendar.
+  expect(
+    (await admin.as.query(api.people.get, { staffId: s.staffId })).absences,
+  ).toEqual(cal.absences);
 
   // Paydays 15 Apr, 1 May, 17 May have passed. Pay 1 May only: 15 Apr and 17 May are still owed.
   const detail = await admin.as.query(api.people.get, { staffId: s.staffId });

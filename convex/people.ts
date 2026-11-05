@@ -172,8 +172,17 @@ export const get = adminQuery({
     if (schedule.settlement)
       paydayDates.set(schedule.settlement.key, schedule.settlement.dueDate);
     const editable = staff.status === "active";
+    // Absent and half days, for the Paydays tab's calendar.
+    const absences = Object.entries(input.attendance)
+      .filter(([, status]) => status === "absent" || status === "half_day")
+      .map(([date, status]) => ({
+        date,
+        kind: status as "absent" | "half_day",
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     return {
+      absences,
       profile: {
         staffId: staff._id,
         name: staff.name,
