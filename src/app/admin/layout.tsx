@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { OrganizationSetup } from "@/components/admin/organization-setup";
 import { AppFrame } from "@/components/app/app-frame";
+import { AppPrompts } from "@/components/app/app-prompts";
+import { notificationPurpose } from "@/components/app/notifications";
 import { Brand } from "@/components/app/brand";
 import {
   PropertyPicker,
@@ -80,6 +82,7 @@ export default function AdminLayout({
           />
         }
       >
+        <AppPrompts purpose={notificationPurpose("admin", false)} />
         <main className="px-4 pt-6 pb-10 md:px-8 print:p-0">
           <div className="mx-auto flex max-w-5xl flex-col gap-6">
             {children}

@@ -53,3 +53,15 @@ export const vStoredPaymentMode = v.union(
   v.literal("opening"),
 );
 export type StoredPaymentMode = Infer<typeof vStoredPaymentMode>;
+
+const vMessage = { enabled: v.boolean(), title: v.string(), body: v.string() };
+/** What the admin chose for each kind of phone notification. */
+export const vNotificationSettings = v.object({
+  /** To admins, one per person whose payday is today, at `time`. */
+  payday: v.object({ ...vMessage, time: v.string() }),
+  /** To a staff member, when a payment to them is recorded. */
+  payment: v.object(vMessage),
+  /** To staff who mark attendance, at each of `times`, if anyone at their property isn't marked today. */
+  marking: v.object({ ...vMessage, times: v.array(v.string()) }),
+});
+export type NotificationSettings = Infer<typeof vNotificationSettings>;

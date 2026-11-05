@@ -34,9 +34,21 @@ describe("company calendar", () => {
   });
 
   test("addDays crosses months on the 30-day calendar", () => {
-    expect(fromIndex(addDays(dayIndex(2027, 3, 30), 1))).toEqual({ y: 2027, m: 4, d: 1 });
-    expect(fromIndex(addDays(dayIndex(2027, 12, 30), 1))).toEqual({ y: 2028, m: 1, d: 1 });
-    expect(fromIndex(addDays(dayIndex(2027, 4, 1), -1))).toEqual({ y: 2027, m: 3, d: 30 });
+    expect(fromIndex(addDays(dayIndex(2027, 3, 30), 1))).toEqual({
+      y: 2027,
+      m: 4,
+      d: 1,
+    });
+    expect(fromIndex(addDays(dayIndex(2027, 12, 30), 1))).toEqual({
+      y: 2028,
+      m: 1,
+      d: 1,
+    });
+    expect(fromIndex(addDays(dayIndex(2027, 4, 1), -1))).toEqual({
+      y: 2027,
+      m: 3,
+      d: 30,
+    });
   });
 
   test("Feb 29 is virtual in non-leap years only; Feb 30 is always virtual", () => {

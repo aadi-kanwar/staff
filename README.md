@@ -26,6 +26,38 @@ tokens, its UI components, Vitest + convex-test.
   organisation's staff, properties, attendance, money or logs
   (`convex/tests/organizations.test.ts`).
 
+## Editing and deleting staff
+
+- **Edit** (Profile tab): name, mobile number (also their login; the password
+  stays the same), department, property and joining date.
+- **Salary terms** tab: **Edit** any row (amount, pay mode, and for a later
+  change the cycle it starts on) and **Remove** any change after joining.
+- Changes that would move paydays (joining date, pay mode, start of a change)
+  are refused while payments or adjustments sit on those paydays, so no
+  money goes missing: remove them in the Ledger, make the change, record
+  them again.
+- **Delete staff member** (Profile tab, type their name to confirm) removes
+  their login and every record for good; the audit log notes it. Use the Exit
+  tab for someone who has simply left.
+
+## Phone notifications
+
+- After Staff is added to the home screen and opened from its icon, people
+  are asked to allow notifications (also: Settings for admins, Profile for
+  staff). Android Chrome, and iPhone once added to the Home Screen.
+- **Admins:** one notification per person whose salary is due that day, at
+  the time set (default 09:00), with what's still owed.
+- **Staff:** when a payment to them is recorded (including a final
+  settlement).
+- **Staff who mark attendance:** at the times set (default 11:00 and 18:00),
+  if anyone else at their property isn't marked yet that day.
+- **Settings → Notifications:** turn each on or off, set the times, and write
+  the title and message with placeholders such as `{name}`, `{amount}`,
+  `{property}`, `{count}`, with a live preview.
+- Sent by `convex/notifications.ts` (a job every 5 minutes; each goes out once
+  per day and time) through `convex/push.ts` (Web Push). The VAPID signing
+  keys are created on the Convex deployment by the Vercel build.
+
 ## Reports
 
 **Reports** (`/admin/reports`) downloads a spreadsheet (CSV, opens in Excel or

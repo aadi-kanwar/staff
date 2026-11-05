@@ -26,7 +26,7 @@ import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { LoadingState } from "@/components/ui/skeleton";
 import { Stat } from "@/components/ui/stat";
-import { ErrorState } from "@/components/ui/states";
+import { EmptyState } from "@/components/ui/states";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { useQuery } from "@/lib/convex";
 import { formatDay, formatINR } from "@/lib/format";
@@ -58,7 +58,18 @@ function StaffDetail() {
   const tab = (params.get("tab") ?? "paydays") as Tab;
   const data = useQuery(api.people.get, { staffId: staffId as Id<"staff"> });
   if (data === undefined) return <LoadingState rows={4} />;
-  if (data === null) return <ErrorState />;
+  if (data === null) {
+    return (
+      <EmptyState
+        title="This staff member was deleted"
+        description={
+          <Link href="/admin/staff" className="underline underline-offset-4">
+            Back to Staff
+          </Link>
+        }
+      />
+    );
+  }
   const { profile, schedule } = data;
   return (
     <>

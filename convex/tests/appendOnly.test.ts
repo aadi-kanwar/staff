@@ -1,6 +1,10 @@
 import { expect, test } from "vitest";
 import { guardedDb } from "../lib/functions";
-import { createAdmin, createStaffMember, setupTest } from "./harness.test-utils";
+import {
+  createAdmin,
+  createStaffMember,
+  setupTest,
+} from "./harness.test-utils";
 
 test("attendance log and audit log entries can be added but never edited or deleted", async () => {
   const t = await setupTest();

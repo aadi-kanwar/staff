@@ -4,14 +4,16 @@
 // needs no manual setup:
 //   1. refuses to run if sample data is allowed on production
 //   2. login signing keys (JWT_PRIVATE_KEY, JWKS): created once if missing
-//   3. SITE_URL: kept equal to the site's production address
-//   4. the backend code is deployed and the website is built against it
-//   5. the first admin: created from FIRST_ADMIN_PHONE / FIRST_ADMIN_PASSWORD /
+//   3. phone notification signing keys (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY): same
+//   4. SITE_URL: kept equal to the site's production address
+//   5. the backend code is deployed and the website is built against it
+//   6. the first admin: created from FIRST_ADMIN_PHONE / FIRST_ADMIN_PASSWORD /
 //      FIRST_ADMIN_NAME (set on the Convex deployment) if there's no admin yet
 // Without the key (e.g. preview builds) it builds the website only.
 // Secret values are never printed.
 import { execFileSync } from "node:child_process";
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
+import webpush from "web-push";
 
 const quiet = (args) =>
   execFileSync("npx", args, {
@@ -51,6 +53,15 @@ if (envGet("JWT_PRIVATE_KEY") === "" || envGet("JWKS") === "") {
     JSON.stringify({ keys: [{ use: "sig", ...(await exportJWK(publicKey)) }] }),
   );
   console.log("Created the login signing keys on the Convex deployment.");
+}
+
+if (envGet("VAPID_PUBLIC_KEY") === "" || envGet("VAPID_PRIVATE_KEY") === "") {
+  const keys = webpush.generateVAPIDKeys();
+  envSet("VAPID_PUBLIC_KEY", keys.publicKey);
+  envSet("VAPID_PRIVATE_KEY", keys.privateKey);
+  console.log(
+    "Created the phone notification signing keys on the Convex deployment.",
+  );
 }
 
 const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;

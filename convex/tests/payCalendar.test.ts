@@ -31,7 +31,7 @@ test("the staff Home calendar marks periods paid, pending, current and upcoming"
   ]);
   expect(before.pending).toBe(15_000);
 
-  const key = (await admin.as.query(api.people.get, { staffId: s.staffId }))
+  const key = (await admin.as.query(api.people.get, { staffId: s.staffId }))!
     .schedule.paydays[0].key;
   await admin.as.mutation(api.payments.record, {
     staffId: s.staffId,
@@ -84,11 +84,13 @@ test("absent and half days are on the calendar; anything owed comes first in bot
   ]);
   // The admin's Paydays tab gets the same absences for its calendar.
   expect(
-    (await admin.as.query(api.people.get, { staffId: s.staffId })).absences,
+    (await admin.as.query(api.people.get, { staffId: s.staffId }))!.absences,
   ).toEqual(cal.absences);
 
   // Paydays 15 Apr, 1 May, 17 May have passed. Pay 1 May only: 15 Apr and 17 May are still owed.
-  const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
+  const detail = (await admin.as.query(api.people.get, {
+    staffId: s.staffId,
+  }))!;
   const may1 = detail.schedule.paydays.find((p) => p.dueDate === "2027-05-01")!;
   await admin.as.mutation(api.payments.record, {
     staffId: s.staffId,

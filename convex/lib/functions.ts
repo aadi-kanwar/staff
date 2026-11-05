@@ -7,6 +7,8 @@
  * Wrappers that browsers can call:
  *   viewerQuery              - signed in or not; ctx.viewer is null when signed out
  *   signedInAction           - any signed-in account (password change)
+ *   signedInQuery/Mutation   - any signed-in, set-up account: only for its own
+ *                              phone notification settings (convex/notifications.ts)
  *   adminQuery/Mutation      - an admin of an organisation (ctx.admin). Takes an
  *                              optional `propertyId` argument: the property the
  *                              screen shows. ctx.admin.properties is every property
@@ -208,6 +210,19 @@ export const viewerQuery = customQuery(
 
 /** Every admin function takes this argument: the property the screen shows (omit for all / the only one). */
 const propertyArg = { propertyId: v.optional(v.id("properties")) };
+
+export const signedInQuery = customQuery(
+  rawQuery,
+  customCtx(async (ctx) => ({ viewer: await requireUser(ctx) })),
+);
+
+export const signedInMutation = customMutation(
+  rawMutation,
+  customCtx(async (ctx) => ({
+    viewer: await requireUser(ctx),
+    db: guardedDb(ctx),
+  })),
+);
 
 export const adminQuery = customQuery(rawQuery, {
   args: propertyArg,

@@ -4,6 +4,7 @@ import { KeyRound } from "lucide-react";
 import Link from "next/link";
 import { api } from "@convex/_generated/api";
 import { formatPhoneForDisplay } from "@convex/lib/inputRules";
+import { NotificationSettings } from "@/components/admin/notification-settings";
 import { OrganizationSettings } from "@/components/admin/organization-settings";
 import { ResetPasswordDialog } from "@/components/admin/staff-tabs";
 import {
@@ -32,6 +33,7 @@ export default function SettingsPage() {
         description="Your organisation and properties, your admin account, and password resets for staff."
       />
       <OrganizationSettings />
+      <NotificationSettings />
       <section aria-labelledby="account" className="flex flex-col gap-2">
         <h2 id="account" className="font-serif text-2xl tracking-tight">
           Admin account

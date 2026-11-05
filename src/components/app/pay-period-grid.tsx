@@ -62,6 +62,15 @@ export const PERIOD_STATE_TEXT: Record<PeriodState, string> = {
   upcoming: "Upcoming",
 };
 
+/** The ₹ badge on a payday, in the colour of the period it pays. */
+const PAYDAY_BADGE: Record<PeriodState | "next", string> = {
+  paid: "bg-success",
+  pending: "bg-danger",
+  next: "bg-info",
+  current: "bg-info",
+  upcoming: "bg-foreground-secondary",
+};
+
 const ABSENCE_SHORT: Record<AbsenceKind, string> = {
   absent: "A",
   half_day: "½",
@@ -123,6 +132,12 @@ export function PayPeriodGrid({
     [absences],
   );
   const next = nextPeriodOf(periods);
+  // Which period each payday pays. For monthly pay the 10th sits inside the
+  // next month's band, so its ₹ badge takes the colour of the month it pays.
+  const paidOn = useMemo(
+    () => new Map(periods.map((p) => [p.payday, p])),
+    [periods],
+  );
   const lastDate = periods.at(-1)?.to ?? today;
   const firstMonth = reserve.from.slice(0, 7);
   const lastMonth = (lastDate > today ? lastDate : today).slice(0, 7);
@@ -209,8 +224,8 @@ export function PayPeriodGrid({
               date < dates[dates.length - 1] &&
               cell.kind !== "none" &&
               keyOf(cellOf(addRealDays(date, 1))) === key;
-            const isPayday =
-              cell.kind === "period" && cell.period.payday === date;
+            const pays = paidOn.get(date) ?? null;
+            const isPayday = pays !== null;
             const isSettlement = settlementDate === date;
             const absence = absenceOn.get(date);
             const tone =
@@ -222,17 +237,19 @@ export function PayPeriodGrid({
                     : PERIOD_TONE[cell.period.state]
                   : "border-transparent text-foreground-muted";
             const isSelected =
+              (pays !== null && selectedId === pays.id) ||
               (cell.kind === "period" && selectedId === cell.period.id) ||
               (cell.kind === "reserve" && selectedId === "reserve");
             const label =
               cell.kind === "reserve"
                 ? `${formatDay(date, "d MMM")}: Joining Reserve`
                 : cell.kind === "period"
-                  ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.from, "d MMM")} to ${formatDay(cell.period.to, "d MMM")}, ${PERIOD_STATE_TEXT[cell.period.state]}${isPayday ? ", payday" : ""}`
+                  ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.from, "d MMM")} to ${formatDay(cell.period.to, "d MMM")}, ${PERIOD_STATE_TEXT[cell.period.state]}`
                   : formatDay(date, "d MMM");
-            const fullLabel = absence
-              ? `${label}. Marked ${ABSENCE_TEXT[absence]}`
-              : label;
+            const paydayLabel = pays
+              ? `. Payday for ${formatDay(pays.from, "d MMM")} to ${formatDay(pays.to, "d MMM")}: ${PERIOD_STATE_TEXT[pays.state]}`
+              : "";
+            const fullLabel = `${label}${paydayLabel}${absence ? `. Marked ${ABSENCE_TEXT[absence]}` : ""}`;
             const body = (
               <>
                 <span
@@ -247,7 +264,17 @@ export function PayPeriodGrid({
                 >
                   {Number(date.slice(8))}
                 </span>
-                {isPayday || isSettlement ? (
+                {pays ? (
+                  <span
+                    className={cn(
+                      "absolute -top-1 -right-0.5 z-10 flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-bold text-white ring-2 ring-surface",
+                      PAYDAY_BADGE[pays === next ? "next" : pays.state],
+                    )}
+                    aria-hidden="true"
+                  >
+                    ₹
+                  </span>
+                ) : isSettlement ? (
                   <span
                     className="absolute top-0.5 right-1 text-[10px] leading-none font-bold"
                     aria-hidden="true"
@@ -291,7 +318,11 @@ export function PayPeriodGrid({
                     aria-pressed={isSelected}
                     onClick={() =>
                       onSelect(
-                        cell.kind === "reserve" ? "reserve" : cell.period.id,
+                        pays
+                          ? pays.id
+                          : cell.kind === "reserve"
+                            ? "reserve"
+                            : cell.period.id,
                       )
                     }
                   >
@@ -314,7 +345,13 @@ export function PayPeriodGrid({
           <Legend className={PERIOD_TONE.upcoming}>Later</Legend>
           <Legend className={PERIOD_TONE.reserve}>Joining Reserve</Legend>
           <li className="flex items-center gap-1.5">
-            <span className="font-bold text-foreground">₹</span> Payday
+            <span
+              className="flex size-4 items-center justify-center rounded-full bg-foreground-secondary text-[10px] font-bold text-white"
+              aria-hidden="true"
+            >
+              ₹
+            </span>
+            Payday (coloured by what it pays)
           </li>
           {(["absent", "half_day"] as const).map((kind) => (
             <li key={kind} className="flex items-center gap-1.5">

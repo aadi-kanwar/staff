@@ -33,7 +33,13 @@ export const PAY_MODE_LABELS: Record<PayMode, string> = {
   half_16day: "Half-salary (16-day)",
 };
 
-export const ATTENDANCE_STATUSES = ["present", "absent", "half_day", "paid_leave", "week_off"] as const;
+export const ATTENDANCE_STATUSES = [
+  "present",
+  "absent",
+  "half_day",
+  "paid_leave",
+  "week_off",
+] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
 export const ATTENDANCE_WEIGHTS: Record<AttendanceStatus, number> = {
@@ -59,7 +65,11 @@ export const HALF_CYCLE_DAYS = 16;
 /** How many future paydays a schedule shows by default. */
 export const DEFAULT_UPCOMING = 6;
 
-export type Terms = { effectiveFromIndex: number; monthlySalary: number; payMode: PayMode };
+export type Terms = {
+  effectiveFromIndex: number;
+  monthlySalary: number;
+  payMode: PayMode;
+};
 
 export type AdjustmentInput = {
   id: string;
@@ -100,7 +110,11 @@ export type EngineInput = {
   upcoming?: number;
 };
 
-export type DayCounts = Record<AttendanceStatus, number> & { virtual: number; unmarked: number; uncounted: number };
+export type DayCounts = Record<AttendanceStatus, number> & {
+  virtual: number;
+  unmarked: number;
+  uncounted: number;
+};
 
 export type AttendanceTally = {
   days: number;
@@ -195,17 +209,25 @@ export type Schedule = {
   settlement: FinalSettlement | null;
 };
 
-export const paydayKey = (staffId: string, paydayIndex: number) => `${staffId}:${paydayIndex}`;
+export const paydayKey = (staffId: string, paydayIndex: number) =>
+  `${staffId}:${paydayIndex}`;
 export const finalKey = (staffId: string) => `${staffId}:final`;
 
 /** Value of one paid day: Mode A pays half the salary per 16 days, Mode B the salary per 30 days. */
 export function dayRateFor(payMode: PayMode, monthlySalary: number): number {
-  return payMode === "half_16day" ? monthlySalary / 2 / HALF_CYCLE_DAYS : monthlySalary / DAYS_PER_MONTH;
+  return payMode === "half_16day"
+    ? monthlySalary / 2 / HALF_CYCLE_DAYS
+    : monthlySalary / DAYS_PER_MONTH;
 }
 
 /** Exact earning for `paidDays` (one division, so halves stay exact). */
-function earningFor(payMode: PayMode, monthlySalary: number, paidDays: number): number {
-  const divisor = payMode === "half_16day" ? 2 * HALF_CYCLE_DAYS : DAYS_PER_MONTH;
+function earningFor(
+  payMode: PayMode,
+  monthlySalary: number,
+  paidDays: number,
+): number {
+  const divisor =
+    payMode === "half_16day" ? 2 * HALF_CYCLE_DAYS : DAYS_PER_MONTH;
   return (monthlySalary * paidDays) / divisor;
 }
 
@@ -246,7 +268,10 @@ export function tallyAttendance(
     if (status === undefined) {
       // Unmarked: counted as Present. Flagged only for past days once tracking began.
       paidDays += 1;
-      if (date < today && (attendanceFrom === undefined || date >= attendanceFrom)) {
+      if (
+        date < today &&
+        (attendanceFrom === undefined || date >= attendanceFrom)
+      ) {
         counts.unmarked += 1;
         unmarkedDates.push(date);
       } else {
@@ -293,17 +318,25 @@ function buildCycles(
   for (let t = 0; t < sorted.length && !enough(); t += 1) {
     const term = sorted[t];
     const segStart = Math.max(term.effectiveFromIndex, earningStartIndex);
-    const nextStart = t + 1 < sorted.length ? sorted[t + 1].effectiveFromIndex : Number.POSITIVE_INFINITY;
+    const nextStart =
+      t + 1 < sorted.length
+        ? sorted[t + 1].effectiveFromIndex
+        : Number.POSITIVE_INFINITY;
     let segEnd = nextStart - 1;
     if (lastIndex !== null) segEnd = Math.min(segEnd, lastIndex);
     let start = segStart;
     while (start <= segEnd && !enough()) {
-      const naturalEnd = term.payMode === "half_16day" ? start + HALF_CYCLE_DAYS - 1 : monthEnd(start);
+      const naturalEnd =
+        term.payMode === "half_16day"
+          ? start + HALF_CYCLE_DAYS - 1
+          : monthEnd(start);
       const end = Math.min(naturalEnd, segEnd);
       // Mode A is paid on the cycle's 16th (last) day itself.
-      const paydayIndex = term.payMode === "half_16day" ? naturalEnd : tenthOfNextMonth(start);
+      const paydayIndex =
+        term.payMode === "half_16day" ? naturalEnd : tenthOfNextMonth(start);
       const isFinal = lastIndex !== null && end === lastIndex;
-      const dueIndex = lastIndex !== null ? Math.min(paydayIndex, lastIndex + 1) : paydayIndex;
+      const dueIndex =
+        lastIndex !== null ? Math.min(paydayIndex, lastIndex + 1) : paydayIndex;
       cycles.push({
         startIndex: start,
         endIndex: end,
@@ -320,7 +353,12 @@ function buildCycles(
   return cycles;
 }
 
-function paydayStatus(dueDate: string, today: string, net: number, paid: number): PaydayStatus {
+function paydayStatus(
+  dueDate: string,
+  today: string,
+  net: number,
+  paid: number,
+): PaydayStatus {
   const outstanding = net - paid;
   if (dueDate > today) {
     if (paid > 0) return outstanding <= 0 ? "paid" : "partially_paid";
@@ -349,13 +387,29 @@ export function adjustmentEffect(adjustments: AdjustmentInput[]): number {
   return sumOf(adjustments, (a) => (a.type === "bonus" ? a.amount : -a.amount));
 }
 
-export function computeReserve(input: Pick<EngineInput, "joinDate" | "terms" | "attendance" | "today" | "attendanceFrom" | "reserveStatus">): Reserve {
+export function computeReserve(
+  input: Pick<
+    EngineInput,
+    | "joinDate"
+    | "terms"
+    | "attendance"
+    | "today"
+    | "attendanceFrom"
+    | "reserveStatus"
+  >,
+): Reserve {
   const joinIndex = joinIndexFromRealDate(input.joinDate);
   const atJoin = sortTerms(input.terms)[0];
   if (atJoin === undefined) throw new Error("No salary terms.");
   const startIndex = joinIndex;
   const endIndex = addDays(joinIndex, RESERVE_DAYS - 1);
-  const tally = tallyAttendance(startIndex, endIndex, input.attendance, input.today, input.attendanceFrom);
+  const tally = tallyAttendance(
+    startIndex,
+    endIndex,
+    input.attendance,
+    input.today,
+    input.attendanceFrom,
+  );
   // Fixed at joining: the salary at joining, never revised.
   const exactAmount = (atJoin.monthlySalary * tally.paidDays) / DAYS_PER_MONTH;
   return {
@@ -377,7 +431,9 @@ export function computeSchedule(input: EngineInput): Schedule {
   const joinIndex = joinIndexFromRealDate(input.joinDate);
   const earningStartIndex = addDays(joinIndex, RESERVE_DAYS);
   const todayIndex = indexOnOrBefore(input.today);
-  const lastIndex = input.lastWorkingDay ? indexOnOrBefore(input.lastWorkingDay) : null;
+  const lastIndex = input.lastWorkingDay
+    ? indexOnOrBefore(input.lastWorkingDay)
+    : null;
   const cycles = buildCycles(
     input.terms,
     earningStartIndex,
@@ -391,14 +447,37 @@ export function computeSchedule(input: EngineInput): Schedule {
 
   const paydays: Payday[] = cycles.map((cycle) => {
     const key = paydayKey(input.staffId, cycle.paydayIndex);
-    const tally = tallyAttendance(cycle.startIndex, cycle.endIndex, input.attendance, input.today, input.attendanceFrom);
-    const fullEarning = earningFor(cycle.payMode, cycle.monthlySalary, tally.days);
-    const earning = earningFor(cycle.payMode, cycle.monthlySalary, tally.paidDays);
+    const tally = tallyAttendance(
+      cycle.startIndex,
+      cycle.endIndex,
+      input.attendance,
+      input.today,
+      input.attendanceFrom,
+    );
+    const fullEarning = earningFor(
+      cycle.payMode,
+      cycle.monthlySalary,
+      tally.days,
+    );
+    const earning = earningFor(
+      cycle.payMode,
+      cycle.monthlySalary,
+      tally.paidDays,
+    );
     const adjustments = adjustmentsByKey.get(key) ?? [];
     const payments = paymentsByKey.get(key) ?? [];
-    const bonus = sumOf(adjustments.filter((a) => a.type === "bonus"), (a) => a.amount);
-    const deduction = sumOf(adjustments.filter((a) => a.type === "deduction"), (a) => a.amount);
-    const advance = sumOf(adjustments.filter((a) => a.type === "advance"), (a) => a.amount);
+    const bonus = sumOf(
+      adjustments.filter((a) => a.type === "bonus"),
+      (a) => a.amount,
+    );
+    const deduction = sumOf(
+      adjustments.filter((a) => a.type === "deduction"),
+      (a) => a.amount,
+    );
+    const advance = sumOf(
+      adjustments.filter((a) => a.type === "advance"),
+      (a) => a.amount,
+    );
     const net = Math.round(earning + bonus - deduction - advance);
     const paid = sumOf(payments, (p) => p.amount);
     const dueDate = toRealDate(cycle.dueIndex);
@@ -417,8 +496,16 @@ export function computeSchedule(input: EngineInput): Schedule {
       tally,
       fullEarning,
       earning,
-      absentDeduction: earningFor(cycle.payMode, cycle.monthlySalary, tally.counts.absent),
-      halfDayDeduction: earningFor(cycle.payMode, cycle.monthlySalary, tally.counts.half_day * 0.5),
+      absentDeduction: earningFor(
+        cycle.payMode,
+        cycle.monthlySalary,
+        tally.counts.absent,
+      ),
+      halfDayDeduction: earningFor(
+        cycle.payMode,
+        cycle.monthlySalary,
+        tally.counts.half_day * 0.5,
+      ),
       bonus,
       deduction,
       advance,
@@ -433,7 +520,9 @@ export function computeSchedule(input: EngineInput): Schedule {
 
   const keys = new Set(paydays.map((p) => p.key));
   const fKey = finalKey(input.staffId);
-  const unsettledAdjustments = input.adjustments.filter((a) => !keys.has(a.paydayKey));
+  const unsettledAdjustments = input.adjustments.filter(
+    (a) => !keys.has(a.paydayKey),
+  );
   const reserve = computeReserve(input);
   const pending = sumOf(
     paydays.filter((p) => p.dueDate <= input.today),
@@ -495,7 +584,13 @@ export function revisionStarts(
   const earningStartIndex = addDays(joinIndex, RESERVE_DAYS);
   const todayIndex = indexOnOrBefore(input.today);
   const latest = sortTerms(input.terms).at(-1)!;
-  const cycles = buildCycles(input.terms, earningStartIndex, null, todayIndex, count + 2);
+  const cycles = buildCycles(
+    input.terms,
+    earningStartIndex,
+    null,
+    todayIndex,
+    count + 2,
+  );
   const starts = cycles.map((c) => c.startIndex);
   // The cycle after the last generated one also starts on its payday / next month.
   const last = cycles.at(-1);
@@ -506,9 +601,60 @@ export function revisionStarts(
 }
 
 /** True when `index` is a valid start for new terms (see revisionStarts). */
-export function isValidRevisionStart(input: Pick<EngineInput, "joinDate" | "terms" | "today">, index: number): boolean {
+export function isValidRevisionStart(
+  input: Pick<EngineInput, "joinDate" | "terms" | "today">,
+  index: number,
+): boolean {
   return revisionStarts(input, 60).includes(index);
 }
 
 /** Converts a real date to a company day for comparisons; null for the 31st. */
 export { fromRealDate };
+
+/**
+ * Cycle first days available to terms that follow `earlier` (sorted), from
+ * after the last of them, past or future: the dates a revision may start on
+ * when it is being corrected. At most `count`, and before `before` if given.
+ */
+export function cycleStartsAfter(
+  joinDate: string,
+  earlier: Terms[],
+  before: number | null,
+  count = 24,
+): number[] {
+  const sorted = sortTerms(earlier);
+  const earningStartIndex = addDays(
+    joinIndexFromRealDate(joinDate),
+    RESERVE_DAYS,
+  );
+  const after = sorted.at(-1)!.effectiveFromIndex;
+  // Generate cycles until `count` of them start after `after`.
+  const cycles = buildCycles(sorted, earningStartIndex, null, after, count + 1);
+  const starts = cycles.map((c) => c.startIndex);
+  const last = cycles.at(-1);
+  if (last) starts.push(last.endIndex + 1);
+  return [...new Set(starts)]
+    .filter((s) => s > after && (before === null || s < before))
+    .slice(0, count);
+}
+
+/**
+ * Why a full salary history wouldn't hold, or null: the first row must start
+ * on the joining date, and each later one on a cycle's first day under the
+ * rows before it, in order.
+ */
+export function termsProblem(joinDate: string, terms: Terms[]): string | null {
+  const sorted = sortTerms(terms);
+  if (sorted.length === 0) return "There must be a salary at joining.";
+  if (sorted[0].effectiveFromIndex !== joinIndexFromRealDate(joinDate))
+    return "The first salary must start on the joining date.";
+  for (let j = 1; j < sorted.length; j += 1) {
+    if (sorted[j].effectiveFromIndex === sorted[j - 1].effectiveFromIndex)
+      return "Two salary changes can't start on the same day.";
+    const starts = cycleStartsAfter(joinDate, sorted.slice(0, j), null, 400);
+    if (!starts.includes(sorted[j].effectiveFromIndex)) {
+      return `The change from ${toRealDate(sorted[j].effectiveFromIndex)} no longer starts on the first day of a pay cycle.`;
+    }
+  }
+  return null;
+}
