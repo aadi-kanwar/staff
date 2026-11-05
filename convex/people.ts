@@ -9,7 +9,7 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { PHONE_PASSWORD_PROVIDER } from "./auth";
 import { createLogin, temporaryPassword } from "./lib/accounts";
 import { writeAudit } from "./lib/audit";
@@ -56,8 +56,10 @@ import {
   loadStaff,
   scheduleFor,
   termsOf,
+  toTerms,
 } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
+import { cycleStartsAfter, termsProblem, type Terms } from "./lib/payroll";
 import { vAdjustmentType, vPayMode, vReserveStatus } from "./lib/validators";
 
 function check<T>(
@@ -147,6 +149,8 @@ export const departments = adminQuery({
 export const get = adminQuery({
   args: { staffId: v.id("staff") },
   handler: async (ctx, { staffId }) => {
+    // Null once deleted (e.g. the page that deleted them is still open).
+    if ((await ctx.db.get(staffId)) === null) return null;
     const staff = await loadStaff(ctx, ctx.admin, staffId);
     const today = todayInIndia();
     const todayIndex = indexOnOrBefore(today);
@@ -213,6 +217,19 @@ export const get = adminQuery({
         isCurrent: t._id === current._id,
         isFuture: t.effectiveFromIndex > todayIndex,
         canCancel: editable && i > 0 && t.effectiveFromIndex > todayIndex,
+        /** Any row can be corrected (and any change after joining removed) while they work here. */
+        canEdit: editable,
+        canDelete: editable && i > 0,
+        /** For changes after joining: the cycle first days it could start on instead. */
+        startOptions:
+          editable && i > 0
+            ? cycleStartsAfter(
+                staff.joinDate,
+                termRows.slice(0, i),
+                termRows[i + 1]?.effectiveFromIndex ?? null,
+                24,
+              ).map((index) => ({ index, date: toRealDate(index) }))
+            : [],
         createdAt: t.createdAt,
       })),
       current: {
@@ -643,6 +660,10 @@ export const updateProfile = adminMutation({
     department: v.string(),
     /** Moves them to another property of the organisation. Omit to keep it. */
     staffPropertyId: v.optional(v.id("properties")),
+    /** A new mobile number: it is also their login. Omit to keep it. */
+    phone: v.optional(v.string()),
+    /** A corrected joining date (moves the salary at joining with it). Omit to keep it. */
+    joinDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const staff = await loadStaff(ctx, ctx.admin, args.staffId);
@@ -653,14 +674,70 @@ export const updateProfile = adminMutation({
         ? staff.propertyId
         : orgProperty(ctx.admin, args.staffPropertyId)._id;
     if (propertyId !== staff.propertyId) requireEditable(staff);
+
+    let phone = staff.phone;
+    if (args.phone !== undefined) {
+      const normalized = normalizePhone(args.phone);
+      if (normalized === null) throw appError("INVALID_PHONE");
+      phone = normalized;
+    }
+    let joinDate = staff.joinDate;
+    if (args.joinDate !== undefined) {
+      joinDate = check(isoDateSchema.safeParse(args.joinDate));
+      if (joinDate > addRealDays(todayInIndia(), 60))
+        throw appError(
+          "INVALID_DATE",
+          "The joining date can be at most 60 days ahead.",
+        );
+    }
     if (
       name === staff.name &&
       department === staff.department &&
-      propertyId === staff.propertyId
+      propertyId === staff.propertyId &&
+      phone === staff.phone &&
+      joinDate === staff.joinDate
     )
       return null;
-    await ctx.db.patch(staff._id, { name, department, propertyId });
-    await ctx.db.patch(staff.userId, { name });
+
+    if (phone !== staff.phone) await changeLoginPhone(ctx, staff, phone);
+    if (joinDate !== staff.joinDate) {
+      requireEditable(staff);
+      const docs = (await termsOf(ctx, staff._id)).sort(
+        (a, b) => a.effectiveFromIndex - b.effectiveFromIndex,
+      );
+      const terms = docs.map(toTerms);
+      terms[0] = {
+        ...terms[0],
+        effectiveFromIndex: joinIndexFromRealDate(joinDate),
+      };
+      if (
+        terms.length > 1 &&
+        terms[0].effectiveFromIndex >= terms[1].effectiveFromIndex
+      ) {
+        throw appError(
+          "CONFLICT",
+          "That joining date is after a salary change. Remove the change first.",
+        );
+      }
+      const problem = termsProblem(joinDate, terms);
+      if (problem)
+        throw appError(
+          "CONFLICT",
+          `${problem} Correct or remove that change first.`,
+        );
+      await requireMoneyFits(ctx, { ...staff, joinDate }, terms);
+      await ctx.db.patch(docs[0]._id, {
+        effectiveFromIndex: terms[0].effectiveFromIndex,
+      });
+    }
+    await ctx.db.patch(staff._id, {
+      name,
+      department,
+      propertyId,
+      phone,
+      joinDate,
+    });
+    await ctx.db.patch(staff.userId, { name, phone });
     await writeAudit(ctx, {
       organizationId: staff.organizationId,
       actorUserId: ctx.admin.userId,
@@ -673,13 +750,274 @@ export const updateProfile = adminMutation({
           name: staff.name,
           department: staff.department,
           propertyId: staff.propertyId,
+          phone: staff.phone,
+          joinDate: staff.joinDate,
         },
-        after: { name, department, propertyId },
+        after: { name, department, propertyId, phone, joinDate },
       },
     });
     return null;
   },
 });
+
+/** Moves the login to a new mobile number (the password stays the same). */
+async function changeLoginPhone(
+  ctx: MutationCtx,
+  staff: Doc<"staff">,
+  phone: string,
+) {
+  const takenByStaff = await ctx.db
+    .query("staff")
+    .withIndex("by_phone", (q) => q.eq("phone", phone))
+    .first();
+  const takenByLogin = await ctx.db
+    .query("users")
+    .withIndex("phone", (q) => q.eq("phone", phone))
+    .first();
+  if (
+    (takenByStaff && takenByStaff._id !== staff._id) ||
+    (takenByLogin && takenByLogin._id !== staff.userId)
+  ) {
+    throw appError("CONFLICT", "That mobile number already has an account.");
+  }
+  for (const account of await ctx.db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) =>
+      q.eq("userId", staff.userId).eq("provider", PHONE_PASSWORD_PROVIDER),
+    )
+    .collect()) {
+    await ctx.db.patch(account._id, { providerAccountId: phone });
+  }
+}
+
+/**
+ * Payments and adjustments point at paydays by key. A change that would
+ * move paydays out from under them (joining date, pay mode, start of a
+ * change) is refused until they're removed, so no money goes missing.
+ */
+async function requireMoneyFits(
+  ctx: Pick<QueryCtx, "db">,
+  staff: Doc<"staff">,
+  terms: Terms[],
+) {
+  const today = todayInIndia();
+  const input = await engineInputFor(ctx, staff, today, 24);
+  const schedule = computeSchedule({
+    ...input,
+    joinDate: staff.joinDate,
+    terms,
+  });
+  const keys = new Set(schedule.paydays.map((p) => p.key));
+  keys.add(finalKey(staff._id));
+  const lost = [
+    ...input.payments
+      .filter((p) => !keys.has(p.paydayKey))
+      .map(
+        (p) =>
+          `a payment of ₹${p.amount.toLocaleString("en-IN")} (${p.paidOn})`,
+      ),
+    ...input.adjustments
+      .filter((a) => !keys.has(a.paydayKey))
+      .map((a) => `a ${a.type} of ₹${a.amount.toLocaleString("en-IN")}`),
+  ];
+  if (lost.length > 0) {
+    throw appError(
+      "CONFLICT",
+      `This would move paydays that already have money recorded: ${lost.slice(0, 3).join(", ")}${lost.length > 3 ? ` and ${lost.length - 3} more` : ""}. Remove them in the Ledger first, then record them again after the change.`,
+    );
+  }
+}
+
+/** Corrects one salary row: amount and pay mode, and for a later change, the cycle it starts on. */
+export const editTerms = adminMutation({
+  args: {
+    termsId: v.id("salaryTerms"),
+    monthlySalary: v.number(),
+    payMode: vPayMode,
+    effectiveFromIndex: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.termsId);
+    if (row === null) throw appError("NOT_FOUND");
+    const staff = await loadStaff(ctx, ctx.admin, row.staffId);
+    requireEditable(staff);
+    const monthlySalary = check(salarySchema.safeParse(args.monthlySalary));
+    const docs = (await termsOf(ctx, staff._id)).sort(
+      (a, b) => a.effectiveFromIndex - b.effectiveFromIndex,
+    );
+    const i = docs.findIndex((d) => d._id === row._id);
+    const effectiveFromIndex =
+      i === 0
+        ? row.effectiveFromIndex
+        : (args.effectiveFromIndex ?? row.effectiveFromIndex);
+    const terms = docs.map((d, j) =>
+      j === i
+        ? { effectiveFromIndex, monthlySalary, payMode: args.payMode }
+        : toTerms(d),
+    );
+    const problem = termsProblem(staff.joinDate, terms);
+    if (problem) throw appError("INVALID_DATE", problem);
+    await requireMoneyFits(ctx, staff, terms);
+    if (
+      effectiveFromIndex === row.effectiveFromIndex &&
+      monthlySalary === row.monthlySalary &&
+      args.payMode === row.payMode
+    )
+      return null;
+    await ctx.db.patch(row._id, {
+      effectiveFromIndex,
+      monthlySalary,
+      payMode: args.payMode,
+    });
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "salary.corrected",
+      entityType: "salaryTerms",
+      entityId: row._id,
+      staffId: staff._id,
+      metadata: {
+        before: {
+          effectiveFrom: toRealDate(row.effectiveFromIndex),
+          monthlySalary: row.monthlySalary,
+          payMode: row.payMode,
+        },
+        after: {
+          effectiveFrom: toRealDate(effectiveFromIndex),
+          monthlySalary,
+          payMode: args.payMode,
+        },
+      },
+    });
+    return null;
+  },
+});
+
+/** Removes a salary change (past or future). The salary at joining can be edited but not removed. */
+export const deleteTerms = adminMutation({
+  args: { termsId: v.id("salaryTerms") },
+  handler: async (ctx, { termsId }) => {
+    const row = await ctx.db.get(termsId);
+    if (row === null) throw appError("NOT_FOUND");
+    const staff = await loadStaff(ctx, ctx.admin, row.staffId);
+    requireEditable(staff);
+    const docs = (await termsOf(ctx, staff._id)).sort(
+      (a, b) => a.effectiveFromIndex - b.effectiveFromIndex,
+    );
+    if (docs[0]._id === termsId)
+      throw appError(
+        "CONFLICT",
+        "The salary at joining can be edited but not removed.",
+      );
+    const terms = docs.filter((d) => d._id !== termsId).map(toTerms);
+    const problem = termsProblem(staff.joinDate, terms);
+    if (problem)
+      throw appError("CONFLICT", `${problem} Correct that change first.`);
+    await requireMoneyFits(ctx, staff, terms);
+    await ctx.db.delete(termsId);
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "salary.revision_cancelled",
+      entityType: "salaryTerms",
+      entityId: termsId,
+      staffId: staff._id,
+      metadata: {
+        effectiveFrom: toRealDate(row.effectiveFromIndex),
+        monthlySalary: row.monthlySalary,
+        payMode: row.payMode,
+      },
+    });
+    return null;
+  },
+});
+
+/**
+ * Deletes a staff member for good: their login, salary history, attendance,
+ * adjustments, payments and phone notifications. The append-only attendance
+ * and audit logs keep their entries; the audit log records who was deleted.
+ * The admin must type the person's name to confirm.
+ */
+export const deleteStaff = adminMutation({
+  args: { staffId: v.id("staff"), confirmName: v.string() },
+  handler: async (ctx, args) => {
+    const staff = await loadStaff(ctx, ctx.admin, args.staffId);
+    if (
+      args.confirmName.trim().toLowerCase() !== staff.name.trim().toLowerCase()
+    ) {
+      throw appError("INVALID_INPUT", "Type their name exactly to confirm.");
+    }
+    const rows = {
+      salaryTerms: await termsOf(ctx, staff._id),
+      attendance: await ctx.db
+        .query("attendance")
+        .withIndex("by_staff_date", (q) => q.eq("staffId", staff._id))
+        .collect(),
+      adjustments: await ctx.db
+        .query("adjustments")
+        .withIndex("by_staff", (q) => q.eq("staffId", staff._id))
+        .collect(),
+      payments: await ctx.db
+        .query("payments")
+        .withIndex("by_staff", (q) => q.eq("staffId", staff._id))
+        .collect(),
+    };
+    for (const list of Object.values(rows))
+      for (const doc of list) await ctx.db.delete(doc._id);
+    const counts = Object.fromEntries(
+      Object.entries(rows).map(([k, list]) => [k, list.length]),
+    );
+    await deleteLogin(ctx, staff.userId);
+    await ctx.db.delete(staff._id);
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "staff.deleted",
+      entityType: "staff",
+      entityId: staff._id,
+      metadata: {
+        name: staff.name,
+        phone: staff.phone,
+        joinDate: staff.joinDate,
+        status: staff.status,
+        deleted: counts,
+      },
+    });
+    return null;
+  },
+});
+
+/** Removes a login entirely: sessions, tokens, accounts, phone notifications and the user. */
+async function deleteLogin(ctx: MutationCtx, userId: Id<"users">) {
+  for (const session of await ctx.db
+    .query("authSessions")
+    .withIndex("userId", (q) => q.eq("userId", userId))
+    .collect()) {
+    for (const token of await ctx.db
+      .query("authRefreshTokens")
+      .withIndex("sessionId", (q) => q.eq("sessionId", session._id))
+      .collect())
+      await ctx.db.delete(token._id);
+    await ctx.db.delete(session._id);
+  }
+  for (const account of await ctx.db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
+    .collect()) {
+    for (const code of await ctx.db
+      .query("authVerificationCodes")
+      .withIndex("accountId", (q) => q.eq("accountId", account._id))
+      .collect())
+      await ctx.db.delete(code._id);
+    await ctx.db.delete(account._id);
+  }
+  for (const sub of await ctx.db
+    .query("pushSubscriptions")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect())
+    await ctx.db.delete(sub._id);
+  await ctx.db.delete(userId);
+}
 
 /** Gives or takes away attendance marking for the other staff of their property. */
 export const setMarking = adminMutation({

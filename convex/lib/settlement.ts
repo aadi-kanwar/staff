@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { writeAudit } from "./audit";
 import { scheduleFor } from "./staffData";
+import { notifyPayment } from "../notifications";
 
 /**
  * Pays everything still owed to a leaver (each payday, plus the reserve and
@@ -9,7 +10,7 @@ import { scheduleFor } from "./staffData";
  * them as exited. Callers check permissions and dates first.
  */
 export async function recordSettlement(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
   staff: Doc<"staff">,
   payment: { paidOn: string; mode: "cash" | "upi" | "bank"; note?: string },
   actor: Id<"users">,
@@ -63,5 +64,13 @@ export async function recordSettlement(
       reserveAmount: settlement.reserveAmount,
     },
   });
+  if (total > 0) {
+    await notifyPayment(ctx, staff, {
+      amount: total,
+      paidOn: payment.paidOn,
+      paydayDate: null,
+      remaining: 0,
+    });
+  }
   return { totalPaid: total };
 }

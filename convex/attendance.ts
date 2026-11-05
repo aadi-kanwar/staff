@@ -250,7 +250,9 @@ export const log = adminQuery({
           q.eq("organizationId", ctx.admin.organization._id),
         )
         .order("desc")) {
-        if (inView.has(row.staffId)) rows.push(row);
+        // Entries for someone since deleted stay visible (they belong to no property any more).
+        if (inView.has(row.staffId) || (await ctx.db.get(row.staffId)) === null)
+          rows.push(row);
         scanned += 1;
         if (rows.length >= limit || scanned >= LOG_SCAN_LIMIT) break;
       }
@@ -259,7 +261,7 @@ export const log = adminQuery({
     const nameOf = async (id: Id<"staff"> | Id<"users">) => {
       if (!names.has(id)) {
         const doc = await ctx.db.get(id);
-        names.set(id, doc?.name ?? "Unknown");
+        names.set(id, doc?.name ?? "Deleted staff member");
       }
       return names.get(id)!;
     };

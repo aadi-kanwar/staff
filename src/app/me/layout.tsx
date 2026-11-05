@@ -2,19 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { AppPrompts } from "@/components/app/app-prompts";
+import { notificationPurpose } from "@/components/app/notifications";
 import { StaffShell } from "@/components/app/staff-shell";
 import { destinationFor, SignOutButton, useMe } from "@/components/app/session";
 import { LoadingState } from "@/components/ui/skeleton";
 import { NotAuthorizedState } from "@/components/ui/states";
 
-export default function StaffLayout({ children }: { children: React.ReactNode }) {
+export default function StaffLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const me = useMe();
   const router = useRouter();
   useEffect(() => {
     if (me === null) router.replace("/signin");
-    else if (me && (me.mustChangePassword || me.role === "admin")) router.replace(destinationFor(me));
+    else if (me && (me.mustChangePassword || me.role === "admin"))
+      router.replace(destinationFor(me));
   }, [me, router]);
-  if (me === undefined || me === null || me.mustChangePassword || me.role === "admin") {
+  if (
+    me === undefined ||
+    me === null ||
+    me.mustChangePassword ||
+    me.role === "admin"
+  ) {
     return (
       <StaffShell>
         <LoadingState rows={3} />
@@ -31,5 +43,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       </StaffShell>
     );
   }
-  return <StaffShell nav>{children}</StaffShell>;
+  return (
+    <StaffShell nav>
+      {children}
+      <AppPrompts
+        purpose={notificationPurpose("staff", me.canMarkAttendance)}
+      />
+    </StaffShell>
+  );
 }

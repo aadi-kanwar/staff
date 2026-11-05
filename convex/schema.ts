@@ -5,6 +5,7 @@ import {
   vAdjustmentType,
   vAttendanceStatus,
   vPayMode,
+  vNotificationSettings,
   vRecordStatus,
   vReserveStatus,
   vRole,
@@ -40,6 +41,8 @@ export default defineSchema({
   organizations: defineTable({
     name: v.string(),
     status: vRecordStatus,
+    /** The admin's choices for phone notifications (absent: defaults; see lib/notificationText.ts). */
+    notificationSettings: v.optional(vNotificationSettings),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
   }),
@@ -158,6 +161,28 @@ export default defineSchema({
   })
     .index("by_staff", ["staffId"])
     .index("by_payday", ["paydayKey"]),
+
+  // Phones/browsers that receive notifications. One per endpoint.
+  pushSubscriptions: defineTable({
+    organizationId: v.id("organizations"),
+    userId: v.id("users"),
+    endpoint: v.string(), // unique
+    p256dh: v.string(),
+    auth: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_endpoint", ["endpoint"])
+    .index("by_user", ["userId"]),
+
+  // Scheduled notifications already sent, so each goes out once per day and time.
+  notificationRuns: defineTable({
+    organizationId: v.id("organizations"),
+    kind: v.string(), // "payday" | "marking"
+    date: v.string(), // India date
+    time: v.string(), // "HH:mm"
+    sentAt: v.number(),
+    recipients: v.number(),
+  }).index("by_org_kind_date_time", ["organizationId", "kind", "date", "time"]),
 
   // Sign-in abuse protection (copied from MealSync): failed attempts per phone.
   authAttemptLimits: defineTable({

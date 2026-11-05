@@ -122,7 +122,7 @@ describe("properties", () => {
       staffPropertyId: south,
     });
     expect(
-      (await admin.as.query(api.people.get, { staffId: a.staffId })).profile
+      (await admin.as.query(api.people.get, { staffId: a.staffId }))!.profile
         .propertyName,
     ).toBe("South PG");
     expect((await a.as.query(api.users.me, {}))?.propertyName).toBe("South PG");
@@ -232,7 +232,7 @@ describe("reports", () => {
       date: "2027-04-05",
       status: "half_day",
     });
-    const key = (await admin.as.query(api.people.get, { staffId: s.staffId }))
+    const key = (await admin.as.query(api.people.get, { staffId: s.staffId }))!
       .schedule.paydays[0].key;
     await admin.as.mutation(api.payments.record, {
       staffId: s.staffId,

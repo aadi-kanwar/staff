@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { notifyPayment } from "./notifications";
 import { writeAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
 import { adminMutation, type AdminViewer } from "./lib/functions";
@@ -32,7 +33,7 @@ function outstandingOf(schedule: Schedule, key: string): number {
 }
 
 async function recordAll(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
   admin: AdminViewer,
   items: Item[],
 ) {
@@ -103,6 +104,14 @@ async function recordAll(
       },
     });
     ids.push(paymentId);
+    await notifyPayment(ctx, entry.staff, {
+      amount: amount.data,
+      paidOn: item.paidOn,
+      paydayDate:
+        entry.schedule.paydays.find((p) => p.key === item.paydayKey)?.dueDate ??
+        null,
+      remaining: left - amount.data,
+    });
   }
   return ids;
 }

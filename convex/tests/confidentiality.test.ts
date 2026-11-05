@@ -96,7 +96,9 @@ test("no staff query returns pay-calculation details", async () => {
       date: "2027-03-08",
       status: "week_off",
     });
-    const detail = await admin.as.query(api.people.get, { staffId: s.staffId });
+    const detail = (await admin.as.query(api.people.get, {
+      staffId: s.staffId,
+    }))!;
     const key = detail.defaultAdjustmentTarget!;
     for (const type of ["advance", "deduction", "bonus"] as const) {
       await admin.as.mutation(api.adjustments.add, {

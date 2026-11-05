@@ -8,11 +8,17 @@
  * @module
  */
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as access from "../access.js";
 import type * as adjustments from "../adjustments.js";
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as authLimits from "../authLimits.js";
+import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as http from "../http.js";
 import type * as lib_accounts from "../lib/accounts.js";
@@ -24,6 +30,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_inputRules from "../lib/inputRules.js";
 import type * as lib_money from "../lib/money.js";
+import type * as lib_notificationText from "../lib/notificationText.js";
 import type * as lib_payroll from "../lib/payroll.js";
 import type * as lib_settlement from "../lib/settlement.js";
 import type * as lib_staffData from "../lib/staffData.js";
@@ -31,28 +38,33 @@ import type * as lib_time from "../lib/time.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as marking from "../marking.js";
 import type * as migrations from "../migrations.js";
+import type * as notifications from "../notifications.js";
 import type * as organization from "../organization.js";
 import type * as paydays from "../paydays.js";
 import type * as payments from "../payments.js";
 import type * as people from "../people.js";
+import type * as push from "../push.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as setup from "../setup.js";
 import type * as staff from "../staff.js";
 import type * as users from "../users.js";
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-
+/**
+ * A utility for referencing Convex functions in your app's API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   adjustments: typeof adjustments;
   attendance: typeof attendance;
   auth: typeof auth;
   authLimits: typeof authLimits;
+  crons: typeof crons;
   dashboard: typeof dashboard;
   http: typeof http;
   "lib/accounts": typeof lib_accounts;
@@ -64,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/functions": typeof lib_functions;
   "lib/inputRules": typeof lib_inputRules;
   "lib/money": typeof lib_money;
+  "lib/notificationText": typeof lib_notificationText;
   "lib/payroll": typeof lib_payroll;
   "lib/settlement": typeof lib_settlement;
   "lib/staffData": typeof lib_staffData;
@@ -71,41 +84,23 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   marking: typeof marking;
   migrations: typeof migrations;
+  notifications: typeof notifications;
   organization: typeof organization;
   paydays: typeof paydays;
   payments: typeof payments;
   people: typeof people;
+  push: typeof push;
   reports: typeof reports;
   seed: typeof seed;
   setup: typeof setup;
   staff: typeof staff;
   users: typeof users;
 }>;
-
-/**
- * A utility for referencing Convex functions in your app's public API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
 >;
-
-export declare const components: {};

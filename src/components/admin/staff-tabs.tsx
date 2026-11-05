@@ -15,6 +15,7 @@ import {
   Undo2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -67,7 +68,7 @@ import {
 } from "@/lib/format";
 import { ADJUSTMENT_LABEL, PAYMENT_MODE_LABEL } from "@/lib/labels";
 
-export type StaffData = FunctionReturnType<typeof api.people.get>;
+export type StaffData = NonNullable<FunctionReturnType<typeof api.people.get>>;
 type Props = { data: StaffData };
 
 function SectionTitle({
@@ -162,9 +163,89 @@ export function ProfileTab({ data }: Props) {
             />
             <MarkingToggle data={data} />
           </div>
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
+            <p className="text-sm text-foreground-secondary">
+              Deleting removes their login and every record (salary, attendance,
+              payments) for good. Use the Exit tab instead if they&apos;ve
+              simply left.
+            </p>
+            <DeleteStaffDialog data={data} />
+          </div>
         </CardBody>
       </Card>
     </>
+  );
+}
+
+/** Deletes the staff member for good, after typing their name. */
+function DeleteStaffDialog({ data }: Props) {
+  const remove = useMutation(api.people.deleteStaff);
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { profile } = data;
+  const matches =
+    typed.trim().toLowerCase() === profile.name.trim().toLowerCase();
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setTyped("");
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="destructive" className="self-start">
+          <Icon icon={Trash2} />
+          Delete staff member
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title={`Delete ${profile.name}?`}
+        description="This removes their login, salary history, attendance, adjustments and payments for good. It can't be undone. The audit log keeps a note that they were deleted."
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            try {
+              await remove({ staffId: profile.staffId, confirmName: typed });
+              toast.success(`${profile.name} was deleted.`);
+              router.replace("/admin/staff");
+            } catch (error) {
+              toast.error(friendlyError(error));
+              setBusy(false);
+            }
+          }}
+        >
+          <Field id="delete-name" label={`Type “${profile.name}” to confirm`}>
+            {(p) => (
+              <Input
+                {...p}
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                autoComplete="off"
+              />
+            )}
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              variant="destructive"
+              loading={busy}
+              disabled={!matches}
+            >
+              Delete for good
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -200,7 +281,10 @@ function EditProfileDialog({ data }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(data.profile.name);
   const [department, setDepartment] = useState(data.profile.department);
+  const [phone, setPhone] = useState(formatPhoneForDisplay(data.profile.phone));
+  const [joinDate, setJoinDate] = useState(data.profile.joinDate);
   const [propertyId, setPropertyId] = useState<string>(data.profile.propertyId);
+  const active = data.profile.status === "active";
   const { properties } = usePropertyScope();
   const canMove = data.profile.status === "active" && properties.length > 1;
   return (
@@ -211,6 +295,8 @@ function EditProfileDialog({ data }: Props) {
         if (next) {
           setName(data.profile.name);
           setDepartment(data.profile.department);
+          setPhone(formatPhoneForDisplay(data.profile.phone));
+          setJoinDate(data.profile.joinDate);
           setPropertyId(data.profile.propertyId);
         }
       }}
@@ -223,7 +309,7 @@ function EditProfileDialog({ data }: Props) {
       </DialogTrigger>
       <DialogContent
         title="Edit details"
-        description="The mobile number is the login and can't be changed here."
+        description="Changing the mobile number changes their login; their password stays the same."
       >
         <form
           className="flex flex-col gap-4"
@@ -236,6 +322,8 @@ function EditProfileDialog({ data }: Props) {
                     staffId: data.profile.staffId,
                     name,
                     department,
+                    phone,
+                    joinDate: active ? joinDate : undefined,
                     staffPropertyId: canMove
                       ? (propertyId as Id<"properties">)
                       : undefined,
@@ -255,6 +343,17 @@ function EditProfileDialog({ data }: Props) {
               />
             )}
           </Field>
+          <Field id="edit-phone" label="Mobile number (login)">
+            {(p) => (
+              <Input
+                {...p}
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            )}
+          </Field>
           <Field id="edit-dept" label="Department">
             {(p) => (
               <Input
@@ -264,6 +363,22 @@ function EditProfileDialog({ data }: Props) {
               />
             )}
           </Field>
+          {active ? (
+            <Field
+              id="edit-join"
+              label="Joining date"
+              hint="Moves the Joining Reserve and paydays. Not allowed while payments sit on paydays that would move."
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  type="date"
+                  value={joinDate}
+                  onChange={(e) => setJoinDate(e.target.value)}
+                />
+              )}
+            </Field>
+          ) : null}
           {canMove ? (
             <Field
               id="edit-property"
@@ -390,11 +505,11 @@ export function ResetPasswordDialog({
 // --- Salary terms --------------------------------------------------------------
 
 export function SalaryTab({ data }: Props) {
-  const cancel = useMutation(api.people.cancelRevision);
+  const remove = useMutation(api.people.deleteTerms);
   const { busy, run } = useRun();
   return (
     <>
-      <SectionTitle description="The earliest row is the salary at joining (it fixes the Joining Reserve). Changes start on the first day of a pay cycle.">
+      <SectionTitle description="The earliest row is the salary at joining (it fixes the Joining Reserve). Changes start on the first day of a pay cycle. Any row can be corrected; changes after joining can be removed.">
         Salary history
       </SectionTitle>
       <Table>
@@ -425,21 +540,35 @@ export function SalaryTab({ data }: Props) {
                     Scheduled
                   </StatusBadge>
                 ) : null}
-                {t.canCancel ? (
-                  <Button
-                    variant="ghost"
-                    loading={busy}
-                    onClick={() =>
-                      run(
-                        () => cancel({ termsId: t.termsId }),
-                        "Revision cancelled.",
-                      )
-                    }
-                  >
-                    <Icon icon={Undo2} />
-                    Cancel
-                  </Button>
-                ) : null}
+                <span className="inline-flex flex-wrap justify-end gap-1">
+                  {t.canEdit ? (
+                    <EditTermsDialog
+                      terms={t}
+                      isJoining={t.termsId === data.terms[0].termsId}
+                    />
+                  ) : null}
+                  {t.canDelete ? (
+                    <Button
+                      variant="ghost"
+                      loading={busy}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Remove the change from ${formatDate(t.effectiveFromDate)}?`,
+                          )
+                        )
+                          return;
+                        void run(
+                          () => remove({ termsId: t.termsId }),
+                          "Salary change removed.",
+                        );
+                      }}
+                    >
+                      <Icon icon={Undo2} />
+                      Remove
+                    </Button>
+                  ) : null}
+                </span>
               </TD>
             </TR>
           ))}
@@ -455,6 +584,130 @@ export function SalaryTab({ data }: Props) {
         </Banner>
       )}
     </>
+  );
+}
+
+type TermsRow = Props["data"]["terms"][number];
+
+/** Corrects one salary row: amount, pay mode and, for a later change, the cycle it starts on. */
+function EditTermsDialog({
+  terms,
+  isJoining,
+}: {
+  terms: TermsRow;
+  isJoining: boolean;
+}) {
+  const edit = useMutation(api.people.editTerms);
+  const payModes = useQuery(api.people.payModes, {});
+  const { busy, run } = useRun();
+  const [open, setOpen] = useState(false);
+  const [salary, setSalary] = useState(String(terms.monthlySalary));
+  const [payMode, setPayMode] = useState(terms.payMode);
+  const [start, setStart] = useState(String(terms.effectiveFromIndex));
+  const options = [
+    { index: terms.effectiveFromIndex, date: terms.effectiveFromDate },
+    ...terms.startOptions,
+  ]
+    .filter((o, i, all) => all.findIndex((x) => x.index === o.index) === i)
+    .sort((a, b) => a.index - b.index);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) {
+          setSalary(String(terms.monthlySalary));
+          setPayMode(terms.payMode);
+          setStart(String(terms.effectiveFromIndex));
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="ghost">
+          <Icon icon={Pencil} />
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title={isJoining ? "Edit salary at joining" : "Edit salary change"}
+        description="Recalculates every payday it covers. Not allowed while payments sit on paydays that would move: remove those in the Ledger first."
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const ok = await run(
+              () =>
+                edit({
+                  termsId: terms.termsId,
+                  monthlySalary: Number(salary),
+                  payMode,
+                  effectiveFromIndex: isJoining ? undefined : Number(start),
+                }),
+              "Salary corrected.",
+            );
+            if (ok) setOpen(false);
+          }}
+        >
+          {isJoining ? null : (
+            <Field
+              id="edit-terms-start"
+              label="Starting"
+              hint="Only the first day of a pay cycle."
+            >
+              {(p) => (
+                <NativeSelect
+                  {...p}
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                >
+                  {options.map((o) => (
+                    <option key={o.index} value={o.index}>
+                      {formatDay(o.date, "EEE d MMM yyyy")}
+                    </option>
+                  ))}
+                </NativeSelect>
+              )}
+            </Field>
+          )}
+          <Field id="edit-terms-salary" label="Monthly salary (₹)">
+            {(p) => (
+              <Input
+                {...p}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={salary}
+                onChange={(e) => setSalary(e.target.value)}
+              />
+            )}
+          </Field>
+          <Field id="edit-terms-mode" label="Pay mode">
+            {(p) => (
+              <NativeSelect
+                {...p}
+                value={payMode}
+                onChange={(e) => setPayMode(e.target.value as typeof payMode)}
+              >
+                {payModes?.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button type="submit" loading={busy}>
+              Save
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

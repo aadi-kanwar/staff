@@ -58,7 +58,7 @@ describe("attendance marking by staff", () => {
       true,
     );
     expect(
-      (await admin.as.query(api.people.get, { staffId: marker.staffId }))
+      (await admin.as.query(api.people.get, { staffId: marker.staffId }))!
         .profile.canMarkAttendance,
     ).toBe(true);
 
