@@ -988,7 +988,7 @@ export const deleteStaff = adminMutation({
 });
 
 /** Removes a login entirely: sessions, tokens, accounts, phone notifications and the user. */
-async function deleteLogin(ctx: MutationCtx, userId: Id<"users">) {
+export async function deleteLogin(ctx: MutationCtx, userId: Id<"users">) {
   for (const session of await ctx.db
     .query("authSessions")
     .withIndex("userId", (q) => q.eq("userId", userId))
