@@ -42,6 +42,8 @@ export const me = viewerQuery({
     const ownProperty = staff ? await ctx.db.get(staff.propertyId) : null;
     return {
       name: staff?.name ?? user.name ?? null,
+      /** The Admin Hub's address, only for master admins who came from the hub (null for everyone else). */
+      hubLink: user.ssoManaged === true ? (process.env.HUB_ORIGIN ?? null) : null,
       /** Admins: their organisation and its properties (null until they set it up). */
       organization: organization && {
         name: organization.name,

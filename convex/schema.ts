@@ -38,6 +38,16 @@ import {
 export default defineSchema({
   ...authTables,
 
+  // Admin Hub sign-in tickets already used (by their one-time `jti`), so a
+  // ticket can't be used twice. Rows older than 10 minutes are deleted by a
+  // scheduled job; by then the ticket has long expired anyway.
+  ssoUsedTickets: defineTable({
+    jti: v.string(), // unique
+    usedAt: v.number(),
+  })
+    .index("by_jti", ["jti"])
+    .index("by_usedAt", ["usedAt"]),
+
   organizations: defineTable({
     name: v.string(),
     status: vRecordStatus,
@@ -70,6 +80,8 @@ export default defineSchema({
     /** Set when an admin created the account or reset its password. */
     mustChangePassword: v.optional(v.boolean()),
     disabled: v.optional(v.boolean()),
+    /** True once a master admin has signed in through the Admin Hub (single sign-on). */
+    ssoManaged: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])

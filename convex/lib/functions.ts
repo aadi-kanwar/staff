@@ -46,6 +46,7 @@ import { v } from "convex/values";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   action as rawAction,
+  httpAction as rawHttpAction,
   internalAction as rawInternalAction,
   internalMutation as rawInternalMutation,
   internalQuery as rawInternalQuery,
@@ -69,9 +70,13 @@ export async function getViewer(ctx: ReadCtx): Promise<SignedInViewer | null> {
   const userId = await getAuthUserId(ctx);
   if (userId === null) return null;
   const sessionId = await getAuthSessionId(ctx);
-  if (sessionId === null || (await ctx.db.get(sessionId)) === null) return null;
+  if (sessionId === null) return null;
+  const session = await ctx.db.get(sessionId);
+  if (session === null) return null;
   const user = await ctx.db.get(userId);
   if (user === null) return null;
+  // Admin Hub logins last 12 hours; end them exactly on time.
+  if (user.ssoManaged === true && session.expirationTime < Date.now()) return null;
   return { userId, user };
 }
 
@@ -341,3 +346,10 @@ export const internalMutation = customMutation(
 );
 
 export const internalAction = rawInternalAction;
+
+/**
+ * Web endpoints (convex/http.ts). They have no login, so each one must check
+ * who is calling before doing anything: the only one, the Admin Hub's
+ * "Revoke in all apps", accepts only a request signed by the hub.
+ */
+export const hubSignedHttpAction = rawHttpAction;

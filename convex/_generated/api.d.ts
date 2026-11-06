@@ -34,6 +34,7 @@ import type * as lib_money from "../lib/money.js";
 import type * as lib_notificationText from "../lib/notificationText.js";
 import type * as lib_payroll from "../lib/payroll.js";
 import type * as lib_settlement from "../lib/settlement.js";
+import type * as lib_ssoTicket from "../lib/ssoTicket.js";
 import type * as lib_staffData from "../lib/staffData.js";
 import type * as lib_time from "../lib/time.js";
 import type * as lib_validators from "../lib/validators.js";
@@ -48,6 +49,8 @@ import type * as push from "../push.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as setup from "../setup.js";
+import type * as sso from "../sso.js";
+import type * as ssoNode from "../ssoNode.js";
 import type * as staff from "../staff.js";
 import type * as users from "../users.js";
 
@@ -81,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "lib/notificationText": typeof lib_notificationText;
   "lib/payroll": typeof lib_payroll;
   "lib/settlement": typeof lib_settlement;
+  "lib/ssoTicket": typeof lib_ssoTicket;
   "lib/staffData": typeof lib_staffData;
   "lib/time": typeof lib_time;
   "lib/validators": typeof lib_validators;
@@ -95,6 +99,8 @@ declare const fullApi: ApiFromModules<{
   reports: typeof reports;
   seed: typeof seed;
   setup: typeof setup;
+  sso: typeof sso;
+  ssoNode: typeof ssoNode;
   staff: typeof staff;
   users: typeof users;
 }>;
