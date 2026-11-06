@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as access from "../access.js";
 import type * as adjustments from "../adjustments.js";
+import type * as admins from "../admins.js";
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as authLimits from "../authLimits.js";
@@ -61,6 +62,7 @@ import type * as users from "../users.js";
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   adjustments: typeof adjustments;
+  admins: typeof admins;
   attendance: typeof attendance;
   auth: typeof auth;
   authLimits: typeof authLimits;

@@ -28,7 +28,10 @@ export type AuditAction =
   | "migration.assigned_existing_data"
   | "staff.marking_changed"
   | "staff.deleted"
-  | "salary.corrected";
+  | "salary.corrected"
+  | "admin.added"
+  | "admin.removed"
+  | "admin.password_reset";
 
 /**
  * Appends one entry to the admin audit log. Never put passwords, tokens or

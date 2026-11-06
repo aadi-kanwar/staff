@@ -26,6 +26,18 @@ tokens, its UI components, Vitest + convex-test.
   organisation's staff, properties, attendance, money or logs
   (`convex/tests/organizations.test.ts`).
 
+## Admins
+
+- **Settings → Admins** lists everyone who manages the organisation. Every
+  admin has full access (all properties, staff, pay, reports, settings).
+- **Add admin:** name and mobile number; you get a temporary password, shown
+  once, to give them. They sign in with it and must choose their own.
+- **Reset password** and **Remove** for other admins. You can't remove
+  yourself, and an organisation always keeps at least one admin. All of it
+  is in the audit log (`convex/admins.ts`).
+- `setup:createFirstAdmin` is only for the very first admin of a new
+  deployment.
+
 ## Editing and deleting staff
 
 - **Edit** (Profile tab): name, mobile number (also their login; the password
