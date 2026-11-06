@@ -32,7 +32,8 @@ export type AuditAction =
   | "admin.added"
   | "admin.removed"
   | "admin.password_reset"
-  | "sso.signed_in";
+  | "sso.signed_in"
+  | "sso.access_revoked";
 
 /**
  * Appends one entry to the admin audit log. Never put passwords, tokens or

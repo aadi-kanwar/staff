@@ -46,6 +46,7 @@ import { v } from "convex/values";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   action as rawAction,
+  httpAction as rawHttpAction,
   internalAction as rawInternalAction,
   internalMutation as rawInternalMutation,
   internalQuery as rawInternalQuery,
@@ -345,3 +346,10 @@ export const internalMutation = customMutation(
 );
 
 export const internalAction = rawInternalAction;
+
+/**
+ * Web endpoints (convex/http.ts). They have no login, so each one must check
+ * who is calling before doing anything: the only one, the Admin Hub's
+ * "Revoke in all apps", accepts only a request signed by the hub.
+ */
+export const hubSignedHttpAction = rawHttpAction;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { LogOut } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
@@ -52,5 +52,20 @@ export function SignOutButton({ variant = "ghost", full = false }: { variant?: "
       {busy ? null : <Icon icon={LogOut} />}
       Log out
     </Button>
+  );
+}
+
+/** "← Admin Hub": shown only to master admins who arrived from the Admin Hub. */
+export function AdminHubLink() {
+  const me = useMe();
+  if (!me?.hubLink) return null;
+  return (
+    <a
+      href={me.hubLink}
+      className="inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground-secondary hover:text-foreground"
+    >
+      <Icon icon={ArrowLeft} className="size-3.5" />
+      Admin Hub
+    </a>
   );
 }

@@ -28,6 +28,12 @@ export type HubTicket = {
   name: string;
 };
 
+/** What the hub's "Revoke in all apps" request carries. */
+export type HubRevoke = {
+  jti: string;
+  phone: string; // E.164: the master admin whose access is removed
+};
+
 export type HubTicketSettings = {
   publicKey: string | undefined;
   hubOrigin: string | undefined;
@@ -37,34 +43,46 @@ export function hubTicketSettingsFromEnv(): HubTicketSettings {
   return { publicKey: process.env.HUB_SSO_PUBLIC_KEY, hubOrigin: process.env.HUB_ORIGIN };
 }
 
+/** The checked claims of a JWT the hub signed for `audience`, or null for any problem. */
+async function verifyHubJwt(token: string, settings: HubTicketSettings, audience: string) {
+  const { publicKey, hubOrigin } = settings;
+  if (!publicKey || !hubOrigin || token.length === 0 || token.length > 4096) return null;
+  try {
+    // The key may be stored on one line with "\n" written out; turn those back into line breaks.
+    const key = await importSPKI(publicKey.replace(/\\n/g, "\n").trim(), "EdDSA");
+    const { payload } = await jwtVerify(token, key, {
+      algorithms: ["EdDSA"],
+      issuer: hubOrigin,
+      audience,
+      clockTolerance: SSO_CLOCK_TOLERANCE_SECONDS,
+      maxTokenAge: SSO_MAX_TICKET_AGE_SECONDS,
+      requiredClaims: ["iss", "aud", "sub", "jti", "iat", "exp"],
+    });
+    const { jti, sub } = payload;
+    if (typeof jti !== "string" || jti.length === 0 || jti.length > 200) return null;
+    if (typeof sub !== "string" || sub.length === 0) return null;
+    const phone = typeof payload.phone === "string" ? normalizePhone(payload.phone) : null;
+    if (phone === null) return null;
+    return { payload, jti, sub, phone };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The ticket's details if it is genuine, addressed to this app, unexpired and
  * for a master admin; otherwise null. Callers must never tell the browser why
  * a ticket was refused.
  */
 export async function verifyHubTicket(ticket: string, settings: HubTicketSettings): Promise<HubTicket | null> {
-  const { publicKey, hubOrigin } = settings;
-  if (!publicKey || !hubOrigin || ticket.length === 0 || ticket.length > 4096) return null;
-  try {
-    // The key may be stored on one line with "\n" written out; turn those back into line breaks.
-    const key = await importSPKI(publicKey.replace(/\\n/g, "\n").trim(), "EdDSA");
-    const { payload } = await jwtVerify(ticket, key, {
-      algorithms: ["EdDSA"],
-      issuer: hubOrigin,
-      audience: SSO_APP_ID,
-      clockTolerance: SSO_CLOCK_TOLERANCE_SECONDS,
-      maxTokenAge: SSO_MAX_TICKET_AGE_SECONDS,
-      requiredClaims: ["iss", "aud", "sub", "jti", "iat", "exp"],
-    });
-    if (payload.role !== "master_admin") return null;
-    const { jti, sub } = payload;
-    if (typeof jti !== "string" || jti.length === 0 || jti.length > 200) return null;
-    if (typeof sub !== "string" || sub.length === 0) return null;
-    const phone = typeof payload.phone === "string" ? normalizePhone(payload.phone) : null;
-    if (phone === null) return null;
-    const name = typeof payload.name === "string" ? payload.name.trim().slice(0, 80) : "";
-    return { jti, hubAdminId: sub, phone, name: name.length > 0 ? name : "Admin" };
-  } catch {
-    return null;
-  }
+  const checked = await verifyHubJwt(ticket, settings, SSO_APP_ID);
+  if (checked === null || checked.payload.role !== "master_admin") return null;
+  const name = typeof checked.payload.name === "string" ? checked.payload.name.trim().slice(0, 80) : "";
+  return { jti: checked.jti, hubAdminId: checked.sub, phone: checked.phone, name: name.length > 0 ? name : "Admin" };
+}
+
+/** A genuine, unexpired "Revoke in all apps" request for this app (audience "<app>-revoke"), or null. */
+export async function verifyHubRevoke(token: string, settings: HubTicketSettings): Promise<HubRevoke | null> {
+  const checked = await verifyHubJwt(token, settings, `${SSO_APP_ID}-revoke`);
+  return checked === null ? null : { jti: checked.jti, phone: checked.phone };
 }

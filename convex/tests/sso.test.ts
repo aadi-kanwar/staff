@@ -213,3 +213,98 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     expect(result.tokens?.token).toBeTruthy();
   });
 });
+
+/** A "Revoke in all apps" token as the hub signs it. */
+const revokeToken = (overrides: JWTPayload = {}, key: CryptoKey = hubKey) =>
+  ticket({ aud: "staff-revoke", role: undefined, name: undefined, ...overrides }, key);
+
+const callRevoke = (t: T, token?: string) =>
+  t.fetch("/sso/revoke", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+
+const hubSessions = async (t: T, phone: string) => {
+  const user = (await userByPhone(t, phone))!;
+  return (
+    await t.run((ctx) => ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", user._id)).collect())
+  ).filter((s) => Math.abs(s.expirationTime - s._creationTime - SSO_SESSION_MS) <= 60_000);
+};
+
+describe("Revoke in all apps (/sso/revoke)", () => {
+  test("ends the hub login and removes the admin role the hub gave", async () => {
+    const { t } = await setup();
+    await ssoSignIn(t, await ticket());
+    const [session] = await hubSessions(t, PHONE);
+    const as = t.withIdentity({ subject: `${session.userId}|${session._id}` });
+    expect((await as.query(api.users.me, {}))?.hubLink).toBe(HUB);
+
+    const response = await callRevoke(t, await revokeToken());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, sessionsEnded: 1, adminRemoved: true });
+
+    expect(await as.query(api.users.me, {})).toBeNull();
+    const user = (await userByPhone(t, PHONE))!;
+    expect(user.role).toBeUndefined();
+    expect(user.ssoManaged).toBe(false);
+    expect(await t.run((ctx) => ctx.db.query("authRefreshTokens").collect())).toHaveLength(0);
+    const audit = (await t.run((ctx) => ctx.db.query("auditLog").collect())).map((a) => a.action);
+    expect(audit).toContain("sso.access_revoked");
+
+    // Reactivated in the hub later: signing in through the hub works again.
+    expect((await ssoSignIn(t, await ticket())).tokens?.token).toBeTruthy();
+    expect((await userByPhone(t, PHONE))?.role).toBe("admin");
+  });
+
+  test("an admin who had their own account keeps it and their password login", async () => {
+    const { t, admin } = await setup();
+    await ssoSignIn(t, await ticket({ phone: admin.phone }));
+    const response = await callRevoke(t, await revokeToken({ phone: admin.phone }));
+    expect(await response.json()).toEqual({ ok: true, sessionsEnded: 1, adminRemoved: false });
+    expect(await hubSessions(t, admin.phone)).toHaveLength(0);
+    const user = (await t.run((ctx) => ctx.db.get(admin.userId)))!;
+    expect(user.role).toBe("admin");
+    expect(await admin.as.query(api.users.me, {})).not.toBeNull();
+  });
+
+  test("accounts that never used the hub are not touched", async () => {
+    const { t, admin } = await setup();
+    const member = await createStaffMember(t, admin);
+    const before = await t.run((ctx) => ctx.db.query("users").collect());
+    for (const phone of [admin.phone, member.phone]) {
+      const response = await callRevoke(t, await revokeToken({ phone }));
+      expect(await response.json()).toEqual({ ok: true, sessionsEnded: 0, adminRemoved: false });
+    }
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual(before);
+    expect((await admin.as.query(api.users.me, {}))?.hubLink).toBeNull();
+    expect((await member.as.query(api.users.me, {}))?.hubLink).toBeNull();
+  });
+
+  test("unsigned, wrong-audience, foreign-key, expired and reused requests are refused and change nothing", async () => {
+    const { t } = await setup();
+    await ssoSignIn(t, await ticket());
+    const now = Math.floor(Date.now() / 1000);
+    const reused = await revokeToken();
+    await callRevoke(t, reused);
+    await ssoSignIn(t, await ticket());
+
+    const snapshot = () =>
+      t.run(async (ctx) => ({
+        sessions: await ctx.db.query("authSessions").collect(),
+        users: await ctx.db.query("users").collect(),
+      }));
+    const before = await snapshot();
+    const bad: Record<string, string | undefined> = {
+      none: undefined,
+      signInTicket: await ticket(),
+      otherApp: await revokeToken({ aud: "mealsync-revoke" }),
+      wrongIssuer: await revokeToken({ iss: "https://evil.example.test" }),
+      foreignKey: await revokeToken({}, otherKey),
+      expired: await revokeToken({ iat: now - 100, exp: now - 40 }),
+      reused,
+    };
+    for (const [name, token] of Object.entries(bad)) {
+      const response = await callRevoke(t, token);
+      expect(response.status, name).toBe(401);
+      expect(await response.json(), name).toEqual({ ok: false });
+    }
+    expect(await snapshot()).toEqual(before);
+  });
+});

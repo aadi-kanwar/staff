@@ -11,7 +11,12 @@ import {
   PropertyPicker,
   PropertyScopeProvider,
 } from "@/components/app/property-scope";
-import { destinationFor, SignOutButton, useMe } from "@/components/app/session";
+import {
+  destinationFor,
+  SignOutButton,
+  useMe,
+  AdminHubLink,
+} from "@/components/app/session";
 import { ADMIN_NAV } from "@/components/nav/nav-items";
 import { BottomNav, StaffSidebar } from "@/components/nav/staff-nav";
 import { LoadingState } from "@/components/ui/skeleton";
@@ -62,6 +67,7 @@ export default function AdminLayout({
                 </span>
               </div>
               <div className="flex min-w-0 items-center gap-2">
+                <AdminHubLink />
                 <PropertyPicker />
                 {/* On phones, Log out is in the bottom bar's More menu. */}
                 <span className="hidden md:block">
