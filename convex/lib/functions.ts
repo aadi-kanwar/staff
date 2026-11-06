@@ -69,9 +69,13 @@ export async function getViewer(ctx: ReadCtx): Promise<SignedInViewer | null> {
   const userId = await getAuthUserId(ctx);
   if (userId === null) return null;
   const sessionId = await getAuthSessionId(ctx);
-  if (sessionId === null || (await ctx.db.get(sessionId)) === null) return null;
+  if (sessionId === null) return null;
+  const session = await ctx.db.get(sessionId);
+  if (session === null) return null;
   const user = await ctx.db.get(userId);
   if (user === null) return null;
+  // Admin Hub logins last 12 hours; end them exactly on time.
+  if (user.ssoManaged === true && session.expirationTime < Date.now()) return null;
   return { userId, user };
 }
 

@@ -17,7 +17,8 @@ export type AppErrorCode =
   | "INVALID_PHONE"
   | "WEAK_PASSWORD"
   | "INVALID_DATE"
-  | "ORG_REQUIRED";
+  | "ORG_REQUIRED"
+  | "SSO_LINK_EXPIRED";
 
 export type AppErrorData = { code: AppErrorCode; message: string };
 
@@ -37,6 +38,8 @@ export const DEFAULT_MESSAGES: Record<AppErrorCode, string> = {
   WEAK_PASSWORD: "Please choose a stronger password.",
   INVALID_DATE: "That date can't be used here.",
   ORG_REQUIRED: "Set up your organisation first.",
+  // Deliberately the same for every Admin Hub sign-in failure: never say why.
+  SSO_LINK_EXPIRED: "This link has expired. Open it again from the Admin Hub.",
 };
 
 export function appError(
