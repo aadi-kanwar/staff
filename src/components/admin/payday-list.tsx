@@ -50,8 +50,13 @@ export function PaydayList({
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <span className="tabular font-semibold">
-              {formatINR(row.outstanding)}
+              {formatINR(row.outstanding > 0 ? row.outstanding : row.net)}
             </span>
+            {row.outstanding <= 0 && row.lastPaidOn ? (
+              <span className="text-xs text-foreground-secondary">
+                paid {formatDay(row.lastPaidOn, "d MMM")}
+              </span>
+            ) : null}
             <PaydayStatusBadge status={row.status} overdue={row.overdue} />
           </div>
         </li>

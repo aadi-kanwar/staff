@@ -1,7 +1,12 @@
 /** Admin: the dashboard. */
 import { addRealDays } from "./lib/companyCalendar";
 import { adminQuery } from "./lib/functions";
-import { allSchedules, openPaydays } from "./lib/adminViews";
+import {
+  allSchedules,
+  monthBounds,
+  openPaydays,
+  paydaysBetween,
+} from "./lib/adminViews";
 import { worksOn } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
 
@@ -25,8 +30,20 @@ export const summary = adminQuery({
     }
     const open = openPaydays(entries, today, 7);
     const weekEnd = addRealDays(today, 7);
+    const thisMonth = monthBounds(today);
+    const { month, rows: monthRows } = await paydaysBetween(
+      ctx,
+      ctx.admin,
+      today,
+      thisMonth.start,
+      thisMonth.end,
+    );
     return {
       today,
+      /** This calendar month: total due, still pending, paid this month. */
+      month,
+      /** Every payday due this month, paid or not. */
+      monthRows,
       attendance: { working: working.length, marked },
       dueSoon: open.filter(
         (r) => r.dueDate >= today && r.dueDate <= weekEnd && !r.overdue,

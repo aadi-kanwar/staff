@@ -37,99 +37,224 @@ import {
   useShowProperty,
 } from "@/components/app/property-scope";
 import { friendlyError } from "@/lib/errors";
-import { formatDay, formatINR, todayIn } from "@/lib/format";
+import { addMonths, formatDay, formatINR, todayIn } from "@/lib/format";
+import { addRealDays } from "@convex/lib/companyCalendar";
+import { PropertyFilter } from "@/components/admin/property-filter";
 
-type Filter = "due" | "upcoming" | "all";
+type Filter = "owed" | "upcoming" | "paid" | "all";
+type Preset = "this-month" | "next-30" | "last-month" | "custom";
+
+/** First and last day of the calendar month containing `date`. */
+function monthOf(date: string) {
+  const [y, m] = date.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    from: `${date.slice(0, 7)}-01`,
+    to: `${date.slice(0, 7)}-${String(last).padStart(2, "0")}`,
+  };
+}
+
+function presetRange(preset: Exclude<Preset, "custom">, today: string) {
+  if (preset === "this-month") return monthOf(today);
+  if (preset === "last-month")
+    return monthOf(`${addMonths(today.slice(0, 7), -1)}-01`);
+  return { from: today, to: addRealDays(today, 30) };
+}
+
+const PRESETS: { value: Preset; label: string }[] = [
+  { value: "this-month", label: "This month" },
+  { value: "next-30", label: "Next 30 days" },
+  { value: "last-month", label: "Last month" },
+  { value: "custom", label: "Choose dates" },
+];
 
 export default function PayrollPage() {
   const scope = usePropertyScope();
   const showProperty = useShowProperty();
-  const data = useQuery(api.paydays.overview, { days: 31, ...scope.arg });
-  const [filter, setFilter] = useState<Filter>("due");
+  const today = todayIn();
+  const [preset, setPreset] = useState<Preset>("this-month");
+  const [custom, setCustom] = useState(() => monthOf(today));
+  const range = preset === "custom" ? custom : presetRange(preset, today);
+  const rangeOk =
+    range.from !== "" && range.to !== "" && range.from <= range.to;
+  const data = useQuery(
+    api.paydays.range,
+    rangeOk ? { ...range, ...scope.arg } : "skip",
+  );
+  const [filter, setFilter] = useState<Filter>("owed");
   const [department, setDepartment] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const rangePicker = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <div className="sm:w-44">
+        <NativeSelect
+          aria-label="Dates"
+          value={preset}
+          onChange={(e) => setPreset(e.target.value as Preset)}
+        >
+          {PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
+      {preset === "custom" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            aria-label="From"
+            type="date"
+            value={custom.from}
+            onChange={(e) => setCustom({ ...custom, from: e.target.value })}
+          />
+          <Input
+            aria-label="To"
+            type="date"
+            value={custom.to}
+            onChange={(e) => setCustom({ ...custom, to: e.target.value })}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (!rangeOk) {
+    return (
+      <>
+        <PageHeader title="Payroll" />
+        {rangePicker}
+        <EmptyState title="Choose a start date on or before the end date" />
+      </>
+    );
+  }
   if (data === undefined) return <LoadingState rows={5} />;
-  const departments = [...new Set(data.rows.map((r) => r.department))].sort();
-  const byFilter = (r: OpenRow) =>
-    filter === "all"
-      ? true
-      : filter === "due"
-        ? r.dueDate <= data.today
-        : r.dueDate > data.today;
-  const rows = data.rows.filter(
-    (r) => byFilter(r) && (department === "" || r.department === department),
-  );
-  const chosen = data.rows.filter(
-    (r) => selected.has(r.key) && r.outstanding > 0,
-  );
+  const all = [...data.owedNow, ...data.rows];
+  const departments = [...new Set(all.map((r) => r.department))].sort();
+  const byDepartment = (r: OpenRow) =>
+    department === "" || r.department === department;
+  const lists: Record<Filter, OpenRow[]> = {
+    owed: data.owedNow,
+    upcoming: data.rows.filter(
+      (r) => r.dueDate > data.today && r.outstanding > 0,
+    ),
+    paid: data.rows
+      .filter((r) => r.outstanding <= 0)
+      .sort((a, b) => b.dueDate.localeCompare(a.dueDate)),
+    all: data.rows,
+  };
+  const rows = lists[filter].filter(byDepartment);
+  const chosen = all.filter((r) => selected.has(r.key) && r.outstanding > 0);
   const toggle = (key: string) => {
     const next = new Set(selected);
     if (next.has(key)) next.delete(key);
     else next.add(key);
     setSelected(next);
   };
-  const dueCount = data.rows.filter((r) => r.dueDate <= data.today).length;
+  const owedTotal = data.owedNow.reduce((a, r) => a + r.outstanding, 0);
+  const monthName = formatDay(data.month.start, "MMMM");
   return (
     <>
       <PageHeader
         title="Payroll"
-        description={`Every payday that's due, and those coming in the next month: ${scope.current?.name ?? "all properties"}.`}
+        description={`${scope.current?.name ?? "All properties"} · paydays from ${formatDay(data.from, "d MMM yyyy")} to ${formatDay(data.to, "d MMM yyyy")}. Anything owed now is always listed under Owed now.`}
       />
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
-          label="Due now"
-          value={formatINR(data.dueNow)}
-          emphasis={data.dueNow > 0}
-          hint={`${dueCount} paydays`}
+          label="Owed now"
+          value={formatINR(owedTotal)}
+          emphasis={owedTotal > 0}
+          hint={`${data.owedNow.length} ${data.owedNow.length === 1 ? "payday" : "paydays"}, any month`}
         />
         <Stat
-          label="Coming in 31 days"
-          value={formatINR(
-            data.rows
-              .filter((r) => r.dueDate > data.today)
-              .reduce((a, r) => a + r.outstanding, 0),
-          )}
-          hint="Projected, assuming Present for the remaining days"
+          label={`Due in ${monthName}`}
+          value={formatINR(data.month.due)}
+          hint={`${data.month.tickets} ${data.month.tickets === 1 ? "payday" : "paydays"}, 1–${Number(data.month.end.slice(8))} ${monthName}`}
+        />
+        <Stat
+          label={`Pending in ${monthName}`}
+          value={formatINR(data.month.pending)}
+          warn={data.month.pending > 0}
+          hint={`${data.month.tickets - data.month.paidTickets} not fully paid`}
+        />
+        <Stat
+          label={`Paid in ${monthName}`}
+          value={formatINR(data.month.paid)}
+          hint="Payments made this month"
         />
       </dl>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+          {rangePicker}
+          <PropertyFilter />
+          <div className="sm:w-52">
+            <NativeSelect
+              aria-label="Department"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+            >
+              <option value="">All departments</option>
+              {departments.map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </NativeSelect>
+          </div>
+        </div>
         <SegmentedTabs
           label="Which paydays"
-          className="sm:w-96"
+          className="sm:max-w-xl"
           items={[
-            { value: "due", label: "Due now", count: dueCount },
-            { value: "upcoming", label: "Upcoming" },
+            {
+              value: "owed",
+              label: "Owed now",
+              count: lists.owed.filter(byDepartment).length,
+            },
+            {
+              value: "upcoming",
+              label: "Upcoming",
+              count: lists.upcoming.filter(byDepartment).length,
+            },
+            {
+              value: "paid",
+              label: "Paid",
+              count: lists.paid.filter(byDepartment).length,
+            },
             { value: "all", label: "All" },
           ]}
           value={filter}
           onChange={setFilter}
         />
-        <div className="sm:w-52">
-          <NativeSelect
-            aria-label="Department"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-          >
-            <option value="">All departments</option>
-            {departments.map((d) => (
-              <option key={d}>{d}</option>
-            ))}
-          </NativeSelect>
-        </div>
       </div>
       {rows.length === 0 ? (
         <EmptyState
           icon={CircleCheck}
-          title={filter === "due" ? "Nothing is due" : "No paydays here"}
+          title={
+            filter === "owed"
+              ? "Nothing is owed"
+              : filter === "paid"
+                ? "Nothing paid in these dates"
+                : "No paydays in these dates"
+          }
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            className={
+              filter === "paid"
+                ? "hidden"
+                : "flex flex-wrap items-center justify-between gap-2"
+            }
+          >
             <label className="flex min-h-11 items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 className="size-5 accent-primary"
-                checked={rows.every((r) => selected.has(r.key))}
+                checked={
+                  rows.some((r) => r.outstanding > 0) &&
+                  rows
+                    .filter((r) => r.outstanding > 0)
+                    .every((r) => selected.has(r.key))
+                }
                 onChange={(e) =>
                   setSelected(
                     e.target.checked
@@ -154,14 +279,17 @@ export default function PayrollPage() {
               {rows.map((row) => (
                 <li key={row.key} className="flex flex-col gap-2 px-4 py-3">
                   <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${row.name}, ${formatDay(row.dueDate)}`}
-                      className="mt-1 size-5 shrink-0 accent-primary"
-                      checked={selected.has(row.key)}
-                      disabled={row.outstanding <= 0}
-                      onChange={() => toggle(row.key)}
-                    />
+                    {row.outstanding > 0 ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${row.name}, ${formatDay(row.dueDate)}`}
+                        className="mt-1 size-5 shrink-0 accent-primary"
+                        checked={selected.has(row.key)}
+                        onChange={() => toggle(row.key)}
+                      />
+                    ) : (
+                      <span className="size-5 shrink-0" aria-hidden="true" />
+                    )}
                     <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 flex-col">
                         <Link
@@ -185,19 +313,28 @@ export default function PayrollPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         <span className="tabular font-semibold">
-                          {formatINR(row.outstanding)}
+                          {formatINR(
+                            row.outstanding > 0 ? row.outstanding : row.net,
+                          )}
                         </span>
+                        {row.outstanding <= 0 && row.lastPaidOn ? (
+                          <span className="text-sm text-foreground-secondary">
+                            paid {formatDay(row.lastPaidOn, "d MMM")}
+                          </span>
+                        ) : null}
                         <PaydayStatusBadge
                           status={row.status}
                           overdue={row.overdue}
                         />
-                        <RecordPaymentDialog
-                          staffId={row.staffId}
-                          paydayKey={row.key}
-                          outstanding={row.outstanding}
-                          title={`${row.name}, ${formatDay(row.dueDate, "d MMM")}`}
-                          trigger="Pay"
-                        />
+                        {row.outstanding > 0 ? (
+                          <RecordPaymentDialog
+                            staffId={row.staffId}
+                            paydayKey={row.key}
+                            outstanding={row.outstanding}
+                            title={`${row.name}, ${formatDay(row.dueDate, "d MMM")}`}
+                            trigger="Pay"
+                          />
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -264,7 +401,7 @@ function PayManyDialog({
       </DialogTrigger>
       <DialogContent
         title="Record payments"
-        description={`${rows.length} paydays, ${formatINR(total)} in total, each paid in full.`}
+        description={`${rows.length} ${rows.length === 1 ? "payday" : "paydays"}, ${formatINR(total)} in total, each paid in full.`}
       >
         <ul className="flex max-h-48 flex-col divide-y divide-border overflow-y-auto rounded-md border border-border text-sm">
           {rows.map((r) => (

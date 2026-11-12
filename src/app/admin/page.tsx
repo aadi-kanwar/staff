@@ -3,6 +3,7 @@
 import { ArrowRight, CalendarCheck, CircleCheck, DoorOpen } from "lucide-react";
 import Link from "next/link";
 import { api } from "@convex/_generated/api";
+import { DuesCalendar } from "@/components/admin/dues-calendar";
 import { PaydayList } from "@/components/admin/payday-list";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ export default function AdminDashboard() {
   const data = useQuery(api.dashboard.summary, scope.arg);
   if (data === undefined) return <LoadingState rows={4} />;
   const { attendance } = data;
+  const monthName = formatDay(data.month.start, "MMMM");
   const complete =
     attendance.working > 0 && attendance.marked === attendance.working;
   return (
@@ -29,7 +31,7 @@ export default function AdminDashboard() {
         title="Dashboard"
         description={`${scope.current?.name ?? "All properties"} · ${formatDay(data.today, "EEEE d MMMM yyyy")} · ${data.activeStaff} active staff · updates live`}
       />
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat
           label="Today's attendance"
           value={
@@ -55,9 +57,20 @@ export default function AdminDashboard() {
           emphasis
         />
         <Stat
+          label={`Due in ${monthName}`}
+          value={formatINR(data.month.due)}
+          hint={`${data.month.tickets} ${data.month.tickets === 1 ? "payday" : "paydays"}, 1–${Number(data.month.end.slice(8))} ${monthName} · ${formatINR(data.month.pending)} still to pay`}
+          warn={data.month.pending > 0}
+        />
+        <Stat
+          label={`Paid in ${monthName}`}
+          value={formatINR(data.month.paid)}
+          hint={`${data.month.paidTickets} of ${data.month.tickets} ${data.month.tickets === 1 ? "payday" : "paydays"} fully paid`}
+        />
+        <Stat
           label="Due in the next 7 days"
           value={formatINR(data.dueSoon.reduce((a, r) => a + r.outstanding, 0))}
-          hint={`${data.dueSoon.length} paydays`}
+          hint={`${data.dueSoon.length} ${data.dueSoon.length === 1 ? "payday" : "paydays"}`}
         />
         <Stat
           label="Joining Reserves held"
@@ -117,6 +130,32 @@ export default function AdminDashboard() {
           </Card>
         )}
       </section>
+
+      <section aria-labelledby="due-month" className="flex flex-col gap-2">
+        <div className="flex items-end justify-between gap-3">
+          <h2 id="due-month" className="font-serif text-2xl tracking-tight">
+            Due in {monthName}
+          </h2>
+          <Button asChild variant="ghost">
+            <Link href="/admin/payroll">
+              Payroll
+              <Icon icon={ArrowRight} />
+            </Link>
+          </Button>
+        </div>
+        {data.monthRows.length === 0 ? (
+          <EmptyState title={`No paydays in ${monthName}`} />
+        ) : (
+          <Card>
+            <PaydayList
+              rows={data.monthRows}
+              label={`Paydays due in ${monthName}`}
+            />
+          </Card>
+        )}
+      </section>
+
+      <DuesCalendar today={data.today} />
 
       <section aria-labelledby="due-soon" className="flex flex-col gap-2">
         <div className="flex items-end justify-between gap-3">

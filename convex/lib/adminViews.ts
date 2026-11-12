@@ -14,6 +14,8 @@ export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
     propertyId: staff.propertyId,
     key: p.key,
     dueDate: p.dueDate,
+    /** The latest payment against it, if any. */
+    lastPaidOn: lastPaidOn(p.payments),
     payModeLabel: PAY_MODE_LABELS[p.payMode],
     cycleStartDate: p.cycleStartDate,
     cycleEndDate: p.cycleEndDate,
@@ -39,6 +41,12 @@ export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
 
 export type PaydayRow = ReturnType<typeof paydayRow>;
 
+const lastPaidOn = (payments: { paidOn: string }[]) =>
+  payments.reduce<string | null>(
+    (latest, p) => (latest === null || p.paidOn > latest ? p.paidOn : latest),
+    null,
+  );
+
 export function settlementRow(
   staff: Doc<"staff">,
   schedule: Schedule,
@@ -53,6 +61,7 @@ export function settlementRow(
     propertyId: staff.propertyId,
     key: s.key,
     dueDate: s.dueDate,
+    lastPaidOn: lastPaidOn(s.payments),
     reserveAmount: s.reserveAmount,
     unsettledTotal: s.unsettledTotal,
     net: s.extrasNet,
@@ -110,4 +119,77 @@ export function openPaydays(
     (a, b) =>
       a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name),
   );
+}
+
+/** First and last day of the real calendar month containing `date` ("YYYY-MM-DD"). */
+export function monthBounds(date: string): { start: string; end: string } {
+  const [y, m] = date.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    start: `${date.slice(0, 7)}-01`,
+    end: `${date.slice(0, 7)}-${String(last).padStart(2, "0")}`,
+  };
+}
+
+const daysBetween = (a: string, b: string) =>
+  Math.round(
+    (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000,
+  );
+
+/**
+ * Every payday (and final settlement) due between `from` and `to`, paid or
+ * not, for the staff a screen covers (including people who have left);
+ * what's owed now whatever its date; and this calendar month's totals:
+ * due (net payable), still pending, and paid (payments made this month).
+ */
+export async function paydaysBetween(
+  ctx: Pick<QueryCtx, "db">,
+  admin: Parameters<typeof allStaff>[1],
+  today: string,
+  from: string,
+  to: string,
+) {
+  const month = monthBounds(today);
+  const reach = [to, month.end].sort().at(-1)!;
+  // Enough future paydays to reach the end of the range (16-day cycles are the shortest).
+  const upcoming = Math.min(
+    Math.max(Math.ceil(daysBetween(today, reach) / 15) + 2, 2),
+    60,
+  );
+  const rows: (PaydayRow | SettlementRow)[] = [];
+  const owedNow: (PaydayRow | SettlementRow)[] = [];
+  const figures = { due: 0, pending: 0, paid: 0, tickets: 0, paidTickets: 0 };
+  const inMonth = (d: string) => d >= month.start && d <= month.end;
+  for (const staff of await allStaff(ctx, admin)) {
+    const schedule = await scheduleFor(ctx, staff, today, upcoming);
+    const lines: (PaydayRow | SettlementRow)[] = schedule.paydays.map((p) =>
+      paydayRow(staff, p, today),
+    );
+    if (schedule.settlement && schedule.settlement.extrasNet !== 0)
+      lines.push(settlementRow(staff, schedule, today));
+    for (const row of lines) {
+      if (row.dueDate >= from && row.dueDate <= to) rows.push(row);
+      if (row.dueDate <= today && row.outstanding > 0) owedNow.push(row);
+      if (inMonth(row.dueDate)) {
+        figures.due += row.net;
+        figures.pending += Math.max(row.outstanding, 0);
+        figures.tickets += 1;
+        if (row.outstanding <= 0) figures.paidTickets += 1;
+      }
+    }
+    const payments = [
+      ...schedule.paydays.flatMap((p) => p.payments),
+      ...(schedule.settlement?.payments ?? []),
+    ];
+    for (const pay of payments)
+      if (pay.mode !== "opening" && inMonth(pay.paidOn))
+        figures.paid += pay.amount;
+  }
+  const byDate = (a: PaydayRow | SettlementRow, b: PaydayRow | SettlementRow) =>
+    a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name);
+  return {
+    month: { ...month, ...figures },
+    rows: rows.sort(byDate),
+    owedNow: owedNow.sort(byDate),
+  };
 }
