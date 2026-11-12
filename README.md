@@ -87,12 +87,16 @@ Every download is written to the audit log.
 
 ## Screens
 
-**Admin** (`/admin`): Dashboard · Attendance (daily one-tap grid, per-person
+**Admin** (`/admin`): Dashboard (today's attendance, owed now, due and paid
+this month (1st to the month's last day), this month's paydays, a payday
+calendar marking every day someone is due to be paid, the next 7 days) · Attendance (daily one-tap grid, per-person
 month, change log) · Staff (list, add, detail with Profile, Salary terms,
 Paydays (the same pay calendar as the staff Home above the payday cards;
 clicking a day brings that period's card into view, clicking a card turns the
 calendar to it), Ledger, Attendance, Joining Reserve, Exit) · Payroll (due and
-upcoming paydays, pay several at once) · Reports (CSV downloads) · Settings
+upcoming paydays, pay several at once; this month's due / pending / paid
+totals; a date range of your choice; property and department filters; Owed
+now, Upcoming, Paid and All tabs) · Reports (CSV downloads) · Settings
 (organisation and properties, own account, staff password resets).
 
 **Attendance marking by staff:** an admin can let a staff member mark

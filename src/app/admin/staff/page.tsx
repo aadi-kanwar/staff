@@ -13,6 +13,7 @@ import { api } from "@convex/_generated/api";
 import { formatPhoneForDisplay } from "@convex/lib/inputRules";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PropertyFilter } from "@/components/admin/property-filter";
 import { SearchInput } from "@/components/ui/filter-bar";
 import { Icon } from "@/components/ui/icon";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -83,6 +84,7 @@ export default function StaffListPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <PropertyFilter />
           <div className="sm:w-52">
             <NativeSelect
               aria-label="Department"
