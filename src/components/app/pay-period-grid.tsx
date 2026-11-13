@@ -6,7 +6,7 @@ import { addRealDays } from "@convex/lib/companyCalendar";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { addMonths, formatDay, formatMonth } from "@/lib/format";
+import { addMonths, formatDay, formatINR, formatMonth } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type PeriodState = "paid" | "pending" | "current" | "upcoming";
@@ -55,6 +55,10 @@ export const PERIOD_TONE: Record<PeriodState | "reserve" | "next", string> = {
   reserve: "bg-muted text-foreground-secondary border-border",
 };
 
+/** Days with a past entry recorded but no pay period: paid-looking, dashed. */
+const PAST_TONE =
+  "bg-success-subtle text-success border-dashed border-success-border";
+
 export const PERIOD_STATE_TEXT: Record<PeriodState, string> = {
   paid: "Paid",
   pending: "Pending",
@@ -98,7 +102,21 @@ function datesOfMonth(month: string): string[] {
 type Cell =
   | { kind: "period"; period: CalendarPeriod; highlight: boolean }
   | { kind: "reserve" }
+  | { kind: "past"; entries: PastEntry[] }
   | { kind: "none" };
+
+/** A past payment / bonus / deduction recorded for dates with no pay period. */
+export type PastEntry = {
+  kind: "payment" | "bonus" | "deduction";
+  from: string;
+  to: string;
+  amount: number;
+};
+const PAST_TEXT: Record<PastEntry["kind"], string> = {
+  payment: "past payment",
+  bonus: "past bonus",
+  deduction: "past deduction",
+};
 
 /**
  * A month calendar of pay periods, used on the staff Home and on each staff
@@ -117,7 +135,10 @@ export function PayPeriodGrid({
   initialMonth,
   selectedId,
   onSelect,
+  pastEntries = [],
 }: {
+  /** Past entries for dates with no pay period: those days are shaded as recorded. */
+  pastEntries?: PastEntry[];
   periods: CalendarPeriod[];
   reserve: { from: string; to: string };
   settlementDate: string | null;
@@ -155,14 +176,15 @@ export function PayPeriodGrid({
 
   const cellOf = useMemo(() => {
     return (date: string): Cell => {
+      const period = periods.find((p) => date >= p.from && date <= p.to);
+      if (period) return { kind: "period", period, highlight: period === next };
+      const entries = pastEntries.filter((e) => date >= e.from && date <= e.to);
+      if (entries.length > 0) return { kind: "past", entries };
       if (date >= reserve.from && date <= reserve.to)
         return { kind: "reserve" };
-      const period = periods.find((p) => date >= p.from && date <= p.to);
-      return period
-        ? { kind: "period", period, highlight: period === next }
-        : { kind: "none" };
+      return { kind: "none" };
     };
-  }, [periods, reserve, next]);
+  }, [periods, reserve, next, pastEntries]);
 
   const dates = datesOfMonth(month);
   const blanks = mondayOffset(dates[0]);
@@ -229,23 +251,27 @@ export function PayPeriodGrid({
             const isSettlement = settlementDate === date;
             const absence = absenceOn.get(date);
             const tone =
-              cell.kind === "reserve"
-                ? PERIOD_TONE.reserve
-                : cell.kind === "period"
-                  ? cell.highlight
-                    ? PERIOD_TONE.next
-                    : PERIOD_TONE[cell.period.state]
-                  : "border-transparent text-foreground-muted";
+              cell.kind === "past"
+                ? PAST_TONE
+                : cell.kind === "reserve"
+                  ? PERIOD_TONE.reserve
+                  : cell.kind === "period"
+                    ? cell.highlight
+                      ? PERIOD_TONE.next
+                      : PERIOD_TONE[cell.period.state]
+                    : "border-transparent text-foreground-muted";
             const isSelected =
               (pays !== null && selectedId === pays.id) ||
               (cell.kind === "period" && selectedId === cell.period.id) ||
               (cell.kind === "reserve" && selectedId === "reserve");
             const label =
-              cell.kind === "reserve"
-                ? `${formatDay(date, "d MMM")}: Joining Reserve`
-                : cell.kind === "period"
-                  ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.from, "d MMM")} to ${formatDay(cell.period.to, "d MMM")}, ${PERIOD_STATE_TEXT[cell.period.state]}`
-                  : formatDay(date, "d MMM");
+              cell.kind === "past"
+                ? `${formatDay(date, "d MMM")}: ${cell.entries.map((e) => `${PAST_TEXT[e.kind]} of ${formatINR(e.amount)} recorded`).join(", ")}`
+                : cell.kind === "reserve"
+                  ? `${formatDay(date, "d MMM")}: Joining Reserve`
+                  : cell.kind === "period"
+                    ? `${formatDay(date, "d MMM")}: pay period ${formatDay(cell.period.from, "d MMM")} to ${formatDay(cell.period.to, "d MMM")}, ${PERIOD_STATE_TEXT[cell.period.state]}`
+                    : formatDay(date, "d MMM");
             const paydayLabel = pays
               ? `. Payday for ${formatDay(pays.from, "d MMM")} to ${formatDay(pays.to, "d MMM")}: ${PERIOD_STATE_TEXT[pays.state]}`
               : "";
@@ -306,7 +332,7 @@ export function PayPeriodGrid({
             );
             return (
               <li key={date}>
-                {cell.kind === "none" ? (
+                {cell.kind === "none" || cell.kind === "past" ? (
                   <div className={classes} aria-label={fullLabel} role="img">
                     {body}
                   </div>
@@ -344,6 +370,9 @@ export function PayPeriodGrid({
           </Legend>
           <Legend className={PERIOD_TONE.upcoming}>Later</Legend>
           <Legend className={PERIOD_TONE.reserve}>Joining Reserve</Legend>
+          {pastEntries.length > 0 ? (
+            <Legend className={PAST_TONE}>Past entry</Legend>
+          ) : null}
           <li className="flex items-center gap-1.5">
             <span
               className="flex size-4 items-center justify-center rounded-full bg-foreground-secondary text-[10px] font-bold text-white"

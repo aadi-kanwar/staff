@@ -58,6 +58,7 @@ export function PayCalendar({ data }: { data: PayCalendarData }) {
         reserve={reserve.period}
         settlementDate={data.settlement?.date ?? null}
         absences={data.absences}
+        pastEntries={data.pastEntries}
         today={today}
         initialMonth={initialMonth}
         selectedId={selectedId}

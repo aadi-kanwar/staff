@@ -212,6 +212,8 @@ export type Schedule = {
 export const paydayKey = (staffId: string, paydayIndex: number) =>
   `${staffId}:${paydayIndex}`;
 export const finalKey = (staffId: string) => `${staffId}:final`;
+/** Past payments, bonuses and deductions the admin recorded for dates with no pay period: kept as history. */
+export const pastKey = (staffId: string) => `${staffId}:past`;
 
 /** Value of one paid day: Mode A pays half the salary per 16 days, Mode B the salary per 30 days. */
 export function dayRateFor(payMode: PayMode, monthlySalary: number): number {
@@ -520,8 +522,10 @@ export function computeSchedule(input: EngineInput): Schedule {
 
   const keys = new Set(paydays.map((p) => p.key));
   const fKey = finalKey(input.staffId);
+  // Past entries for dates with no pay period (pastKey) are history only.
+  const past = pastKey(input.staffId);
   const unsettledAdjustments = input.adjustments.filter(
-    (a) => !keys.has(a.paydayKey),
+    (a) => !keys.has(a.paydayKey) && a.paydayKey !== past,
   );
   const reserve = computeReserve(input);
   const pending = sumOf(

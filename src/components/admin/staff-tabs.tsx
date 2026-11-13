@@ -984,6 +984,7 @@ export function PaydaysTab({ data }: Props) {
           }}
           settlementDate={schedule.settlement?.dueDate ?? null}
           absences={data.absences}
+          pastEntries={data.pastEntries}
           today={data.today}
           initialMonth={initialMonth}
           selectedId={selectedId}
@@ -1085,6 +1086,16 @@ export function LedgerTab({ data }: Props) {
           },
         ]
       : []),
+    // Past bonuses / deductions for dates with no pay period (past payments are in data.payments).
+    ...data.pastEntries
+      .filter((e) => e.kind !== "payment")
+      .map((e) => ({
+        date: e.to,
+        label: e.kind === "bonus" ? "Past bonus" : "Past deduction",
+        detail: e.note ?? undefined,
+        amount: e.kind === "bonus" ? e.amount : -e.amount,
+        kind: "earning" as const,
+      })),
     ...data.payments.map((p) => ({
       date: p.paidOn,
       label: `Payment · ${PAYMENT_MODE_LABEL[p.mode]}`,

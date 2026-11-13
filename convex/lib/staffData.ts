@@ -4,6 +4,7 @@ import { appError } from "./errors";
 import { inScope, type AdminViewer } from "./functions";
 import {
   computeSchedule,
+  pastKey,
   type AttendanceStatus,
   type EngineInput,
   type Schedule,
@@ -145,4 +146,43 @@ export function worksOn(staff: Doc<"staff">, date: string): boolean {
     staff.status === "active" ||
     (staff.lastWorkingDay !== undefined && date <= staff.lastWorkingDay)
   );
+}
+
+/**
+ * Past payments, bonuses and deductions recorded for dates with no pay
+ * period (payments.recordPast): history the calendars, ledger and Payments
+ * show, outside the paydays. Oldest first.
+ */
+export async function pastEntriesOf(ctx: DbCtx, staff: Doc<"staff">) {
+  const key = pastKey(staff._id);
+  const payments = (await paymentsOf(ctx, staff._id)).filter(
+    (p) => p.paydayKey === key,
+  );
+  const adjustments = (await adjustmentsOf(ctx, staff._id)).filter(
+    (a) => a.paydayKey === key,
+  );
+  return [
+    ...payments.map((p) => ({
+      id: p._id as string,
+      kind: "payment" as const,
+      from: p.periodFrom ?? p.paidOn,
+      to: p.periodTo ?? p.paidOn,
+      amount: p.amount,
+      paidOn: p.paidOn as string | null,
+      mode: p.mode as string | null,
+      note: p.note ?? null,
+    })),
+    ...adjustments
+      .filter((a) => a.type === "bonus" || a.type === "deduction")
+      .map((a) => ({
+        id: a._id as string,
+        kind: a.type as "bonus" | "deduction",
+        from: a.periodFrom ?? a.date,
+        to: a.periodTo ?? a.date,
+        amount: a.amount,
+        paidOn: null,
+        mode: null,
+        note: a.note,
+      })),
+  ].sort((a, b) => a.from.localeCompare(b.from));
 }
