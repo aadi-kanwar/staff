@@ -38,6 +38,9 @@ tokens, its UI components, Vitest + convex-test.
   their Payments page, outside "Total paid". Entries saved by the earlier
   version (as payments / adjustments) are converted into records on deploy
   (`migrations:convertPastEntries`, run by the Vercel build).
+  Converted records are listed for the admin (marked "Converted from an
+  earlier entry", removable) but not shown on the calendars or to staff:
+  calendars mark only records created with "Record a past payment".
 - **Salary payment details** (UPI ID and/or bank account: holder's name,
   account number, IFSC, bank): the admin sets them on the Profile tab. A
   staff member can send a change from their Profile; it waits for an admin.

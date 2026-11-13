@@ -199,6 +199,8 @@ export default defineSchema({
     paidOn: v.optional(v.string()),
     mode: v.optional(vStoredPaymentMode),
     note: v.optional(v.string()),
+    /** "converted": made from an entry saved with the earlier version, not entered as a record. */
+    source: v.optional(v.literal("converted")),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
   }).index("by_staff", ["staffId"]),

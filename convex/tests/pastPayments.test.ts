@@ -39,6 +39,7 @@ test("past payments are records only: one breakdown, on the calendars, never in 
   });
 
   const after = (await admin.as.query(api.people.get, { staffId: s.staffId }))!;
+  expect(after.pastRecords.every((r) => !r.converted)).toBe(true);
   expect(
     after.pastRecords.map((r) => [
       r.from,
@@ -204,6 +205,20 @@ test("entries saved the earlier way (payments / adjustments on paydays) become r
     ["2027-05-02", 0, 500, 0, "2027-05-17", "upi"],
   ]);
   expect(after.payments.map((p) => p.amount)).toEqual([100]);
+  // Converted records are listed for the admin (marked), but not shown on calendars or to the staff member.
+  expect(after.pastRecords.every((r) => r.converted)).toBe(true);
+  expect((await s.as.query(api.staff.payCalendar, {})).pastRecords).toEqual([]);
+  expect((await s.as.query(api.staff.payments, {})).pastRecords).toEqual([]);
+  // One created with "Record a past payment" does show.
+  await admin.as.mutation(api.pastRecords.add, {
+    staffId: s.staffId,
+    from: "2027-02-01",
+    to: "2027-02-28",
+    salary: 9_000,
+  });
+  expect((await s.as.query(api.staff.payCalendar, {})).pastRecords).toEqual([
+    { from: "2027-02-01", to: "2027-02-28", total: 9_000 },
+  ]);
   expect(await t.run((ctx) => ctx.db.query("adjustments").collect())).toEqual(
     [],
   );

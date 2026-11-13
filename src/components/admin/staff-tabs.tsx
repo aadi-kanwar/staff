@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Copy,
   DoorOpen,
+  History,
   KeyRound,
   Pencil,
   ShieldOff,
@@ -984,7 +985,7 @@ export function PaydaysTab({ data }: Props) {
           }}
           settlementDate={schedule.settlement?.dueDate ?? null}
           absences={data.absences}
-          pastRecords={data.pastRecords}
+          pastRecords={data.pastRecords.filter((r) => !r.converted)}
           today={data.today}
           initialMonth={initialMonth}
           selectedId={selectedId}
@@ -1082,6 +1083,13 @@ function PastRecordsList({ data }: Props) {
                     <span className="tabular font-serif text-xl">
                       {formatINR(r.total)}
                     </span>
+                    {r.converted ? (
+                      <span className="mt-1 self-start">
+                        <StatusBadge tone="neutral" icon={History}>
+                          Converted from an earlier entry · not on the calendar
+                        </StatusBadge>
+                      </span>
+                    ) : null}
                   </div>
                   <Button
                     variant="ghost"
