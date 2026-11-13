@@ -37,7 +37,10 @@ export type AuditAction =
   | "staff.payout_updated"
   | "staff.payout_requested"
   | "staff.payout_approved"
-  | "staff.payout_rejected";
+  | "staff.payout_rejected"
+  | "past_record.added"
+  | "past_record.removed"
+  | "migration.past_entries_converted";
 
 /**
  * Appends one entry to the admin audit log. Never put passwords, tokens or

@@ -102,21 +102,11 @@ function datesOfMonth(month: string): string[] {
 type Cell =
   | { kind: "period"; period: CalendarPeriod; highlight: boolean }
   | { kind: "reserve" }
-  | { kind: "past"; entries: PastEntry[] }
+  | { kind: "past"; records: PastRecordMark[] }
   | { kind: "none" };
 
-/** A past payment / bonus / deduction recorded for dates with no pay period. */
-export type PastEntry = {
-  kind: "payment" | "bonus" | "deduction";
-  from: string;
-  to: string;
-  amount: number;
-};
-const PAST_TEXT: Record<PastEntry["kind"], string> = {
-  payment: "past payment",
-  bonus: "past bonus",
-  deduction: "past deduction",
-};
+/** A past payment record (records only): the dates it was for and its total. */
+export type PastRecordMark = { from: string; to: string; total: number };
 
 /**
  * A month calendar of pay periods, used on the staff Home and on each staff
@@ -135,10 +125,10 @@ export function PayPeriodGrid({
   initialMonth,
   selectedId,
   onSelect,
-  pastEntries = [],
+  pastRecords = [],
 }: {
-  /** Past entries for dates with no pay period: those days are shaded as recorded. */
-  pastEntries?: PastEntry[];
+  /** Past payment records: their days are outlined (and shaded where there's no pay period). */
+  pastRecords?: PastRecordMark[];
   periods: CalendarPeriod[];
   reserve: { from: string; to: string };
   settlementDate: string | null;
@@ -160,7 +150,11 @@ export function PayPeriodGrid({
     [periods],
   );
   const lastDate = periods.at(-1)?.to ?? today;
-  const firstMonth = reserve.from.slice(0, 7);
+  // Up to 2 months before joining (earlier still if a past record goes back further).
+  const firstMonth = [
+    addMonths(reserve.from.slice(0, 7), -2),
+    ...pastRecords.map((r) => r.from.slice(0, 7)),
+  ].sort()[0];
   const lastMonth = (lastDate > today ? lastDate : today).slice(0, 7);
   const [month, setMonth] = useState(initialMonth);
 
@@ -178,13 +172,15 @@ export function PayPeriodGrid({
     return (date: string): Cell => {
       const period = periods.find((p) => date >= p.from && date <= p.to);
       if (period) return { kind: "period", period, highlight: period === next };
-      const entries = pastEntries.filter((e) => date >= e.from && date <= e.to);
-      if (entries.length > 0) return { kind: "past", entries };
+      const records = pastRecords.filter((r) => date >= r.from && date <= r.to);
+      if (records.length > 0) return { kind: "past", records };
       if (date >= reserve.from && date <= reserve.to)
         return { kind: "reserve" };
       return { kind: "none" };
     };
-  }, [periods, reserve, next, pastEntries]);
+  }, [periods, reserve, next, pastRecords]);
+  const recordsOn = (date: string) =>
+    pastRecords.filter((r) => date >= r.from && date <= r.to);
 
   const dates = datesOfMonth(month);
   const blanks = mondayOffset(dates[0]);
@@ -266,7 +262,7 @@ export function PayPeriodGrid({
               (cell.kind === "reserve" && selectedId === "reserve");
             const label =
               cell.kind === "past"
-                ? `${formatDay(date, "d MMM")}: ${cell.entries.map((e) => `${PAST_TEXT[e.kind]} of ${formatINR(e.amount)} recorded`).join(", ")}`
+                ? `${formatDay(date, "d MMM")}`
                 : cell.kind === "reserve"
                   ? `${formatDay(date, "d MMM")}: Joining Reserve`
                   : cell.kind === "period"
@@ -275,7 +271,11 @@ export function PayPeriodGrid({
             const paydayLabel = pays
               ? `. Payday for ${formatDay(pays.from, "d MMM")} to ${formatDay(pays.to, "d MMM")}: ${PERIOD_STATE_TEXT[pays.state]}`
               : "";
-            const fullLabel = `${label}${paydayLabel}${absence ? `. Marked ${ABSENCE_TEXT[absence]}` : ""}`;
+            const records = recordsOn(date);
+            const recordLabel = records.length
+              ? `. Past payment recorded: ${records.map((r) => formatINR(r.total)).join(", ")}`
+              : "";
+            const fullLabel = `${label}${paydayLabel}${recordLabel}${absence ? `. Marked ${ABSENCE_TEXT[absence]}` : ""}`;
             const body = (
               <>
                 <span
@@ -328,6 +328,8 @@ export function PayPeriodGrid({
               joinsRight ? "border-r-0" : "rounded-r-md border-r",
               isPayday && "font-semibold",
               date === today && "ring-2 ring-foreground ring-inset",
+              records.length > 0 &&
+                "outline-2 -outline-offset-4 outline-success outline-dashed",
               isSelected && "shadow-[inset_0_-3px_0_currentColor]",
             );
             return (
@@ -370,8 +372,14 @@ export function PayPeriodGrid({
           </Legend>
           <Legend className={PERIOD_TONE.upcoming}>Later</Legend>
           <Legend className={PERIOD_TONE.reserve}>Joining Reserve</Legend>
-          {pastEntries.length > 0 ? (
-            <Legend className={PAST_TONE}>Past entry</Legend>
+          {pastRecords.length > 0 ? (
+            <li className="flex items-center gap-1.5">
+              <span
+                className="size-3.5 rounded-sm outline-2 -outline-offset-2 outline-success outline-dashed"
+                aria-hidden="true"
+              />
+              Past payment (record)
+            </li>
           ) : null}
           <li className="flex items-center gap-1.5">
             <span

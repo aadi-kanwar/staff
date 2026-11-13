@@ -58,9 +58,9 @@ import {
   scheduleFor,
   termsOf,
   toTerms,
-  pastEntriesOf,
 } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
+import { pastRecordsOf } from "./pastRecords";
 import {
   checkPayout,
   payoutDetails,
@@ -196,8 +196,8 @@ export const get = adminQuery({
 
     return {
       absences,
-      /** Past payments / bonuses / deductions for dates with no pay period. */
-      pastEntries: await pastEntriesOf(ctx, staff),
+      /** Past payments, for the record only (never in the ledger or balance). */
+      pastRecords: await pastRecordsOf(ctx, staff._id),
       profile: {
         staffId: staff._id,
         name: staff.name,
@@ -979,6 +979,10 @@ export const deleteStaff = adminMutation({
         .collect(),
       payments: await ctx.db
         .query("payments")
+        .withIndex("by_staff", (q) => q.eq("staffId", staff._id))
+        .collect(),
+      pastRecords: await ctx.db
+        .query("pastRecords")
         .withIndex("by_staff", (q) => q.eq("staffId", staff._id))
         .collect(),
     };

@@ -984,7 +984,7 @@ export function PaydaysTab({ data }: Props) {
           }}
           settlementDate={schedule.settlement?.dueDate ?? null}
           absences={data.absences}
-          pastEntries={data.pastEntries}
+          pastRecords={data.pastRecords}
           today={data.today}
           initialMonth={initialMonth}
           selectedId={selectedId}
@@ -1046,7 +1046,93 @@ export function PaydaysTab({ data }: Props) {
           ))}
         </div>
       )}
+      <PastRecordsList data={data} />
     </>
+  );
+}
+
+/** Paydays tab: past payments, for the record only (never in the ledger or balance). */
+function PastRecordsList({ data }: Props) {
+  const remove = useMutation(api.pastRecords.remove);
+  const { busy, run } = useRun();
+  if (data.pastRecords.length === 0) return null;
+  return (
+    <section aria-labelledby="past-records" className="flex flex-col gap-2">
+      <h3 id="past-records" className="font-serif text-xl">
+        Past payments (records)
+      </h3>
+      <p className="text-sm text-foreground-secondary">
+        For the record only: they don&apos;t change what&apos;s owed or the
+        ledger.
+      </p>
+      <ul className="flex flex-col gap-3" aria-label="Past payment records">
+        {[...data.pastRecords].reverse().map((r) => (
+          <li key={r.recordId}>
+            <Card>
+              <CardBody className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="text-sm text-foreground-secondary">
+                      {formatDay(r.from, "d MMM")} –{" "}
+                      {formatDay(r.to, "d MMM yyyy")}
+                      {r.paidOn
+                        ? ` · paid ${formatDay(r.paidOn, "d MMM yyyy")}${r.mode ? ` · ${PAYMENT_MODE_LABEL[r.mode]}` : ""}`
+                        : ""}
+                    </span>
+                    <span className="tabular font-serif text-xl">
+                      {formatINR(r.total)}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    loading={busy}
+                    onClick={() => {
+                      if (window.confirm("Remove this past payment record?"))
+                        void run(
+                          () => remove({ recordId: r.recordId }),
+                          "Record removed.",
+                        );
+                    }}
+                  >
+                    <Icon icon={Trash2} />
+                    Remove
+                  </Button>
+                </div>
+                <DetailList
+                  rows={[
+                    { label: "Salary", value: formatINR(r.salary) },
+                    ...(r.bonus
+                      ? [
+                          {
+                            label: "Bonus",
+                            value: formatINR(r.bonus, { signed: true }),
+                          },
+                        ]
+                      : []),
+                    ...(r.deduction
+                      ? [
+                          {
+                            label: "Deduction",
+                            value: formatINR(-r.deduction, { signed: true }),
+                          },
+                        ]
+                      : []),
+                    {
+                      label: "Total paid",
+                      value: formatINR(r.total),
+                      strong: true,
+                    },
+                  ]}
+                />
+                {r.note ? (
+                  <p className="text-sm text-foreground-secondary">{r.note}</p>
+                ) : null}
+              </CardBody>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -1086,16 +1172,6 @@ export function LedgerTab({ data }: Props) {
           },
         ]
       : []),
-    // Past bonuses / deductions for dates with no pay period (past payments are in data.payments).
-    ...data.pastEntries
-      .filter((e) => e.kind !== "payment")
-      .map((e) => ({
-        date: e.to,
-        label: e.kind === "bonus" ? "Past bonus" : "Past deduction",
-        detail: e.note ?? undefined,
-        amount: e.kind === "bonus" ? e.amount : -e.amount,
-        kind: "earning" as const,
-      })),
     ...data.payments.map((p) => ({
       date: p.paidOn,
       label: `Payment · ${PAYMENT_MODE_LABEL[p.mode]}`,

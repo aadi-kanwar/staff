@@ -72,6 +72,9 @@ if (host && envGet("SITE_URL") !== `https://${host}`) {
 
 loud(["convex", "deploy", "--cmd", "npm run build"]);
 
+// Past payments entered before they became records only: convert them (safe to rerun).
+console.log(quiet(["convex", "run", "migrations:convertPastEntries"]).trim());
+
 const adminExists =
   quiet(["convex", "run", "setup:adminExists"]).trim() === "true";
 if (adminExists) {

@@ -91,3 +91,103 @@ export const assignExistingData = internalMutation({
     };
   },
 });
+
+/**
+ * Past payments, bonuses and deductions entered with the earlier "Record a
+ * past entry" were payments and adjustments on paydays, so they counted in
+ * the balance. Past payments are now records only (pastRecords): this turns
+ * each such entry into a record and removes the payment / adjustment. A
+ * bonus entered as "already paid" (a bonus plus a payment of the same
+ * amount, saved together) becomes one record. Safe to run again; the
+ * Vercel build runs it on every deploy.
+ */
+export const convertPastEntries = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const payments = (await ctx.db.query("payments").collect()).filter(
+      (p) => p.periodFrom !== undefined,
+    );
+    const adjustments = (await ctx.db.query("adjustments").collect()).filter(
+      (a) => a.periodFrom !== undefined,
+    );
+    const used = new Set<string>();
+    let records = 0;
+    const touched = new Map<string, Id<"organizations">>();
+    for (const a of adjustments) {
+      const staff = await ctx.db.get(a.staffId);
+      // A bonus "already paid": the payment saved with it in the same call.
+      const paid =
+        a.type === "bonus"
+          ? payments.find(
+              (p) =>
+                !used.has(p._id) &&
+                p.staffId === a.staffId &&
+                p.amount === a.amount &&
+                p.periodFrom === a.periodFrom &&
+                p.periodTo === a.periodTo &&
+                p.recordedAt === a.createdAt,
+            )
+          : undefined;
+      if (paid) used.add(paid._id);
+      if (staff) {
+        await ctx.db.insert("pastRecords", {
+          staffId: a.staffId,
+          from: a.periodFrom!,
+          to: a.periodTo ?? a.periodFrom!,
+          salary: 0,
+          bonus: a.type === "bonus" ? a.amount : 0,
+          deduction: a.type === "deduction" ? a.amount : 0,
+          paidOn: paid?.paidOn,
+          mode: paid?.mode,
+          note: a.note,
+          createdBy: a.createdBy,
+          createdAt: a.createdAt,
+        });
+        touched.set(staff._id, staff.organizationId);
+        records += 1;
+      }
+      if (paid) await ctx.db.delete(paid._id);
+      await ctx.db.delete(a._id);
+    }
+    // Salary payments: one record per entry (the pieces saved in one call, for one period).
+    const groups = new Map<string, typeof payments>();
+    for (const p of payments) {
+      if (used.has(p._id)) continue;
+      const key = `${p.staffId}|${p.periodFrom}|${p.periodTo}|${p.recordedAt}`;
+      groups.set(key, [...(groups.get(key) ?? []), p]);
+    }
+    for (const group of groups.values()) {
+      const first = group[0];
+      const staff = await ctx.db.get(first.staffId);
+      if (staff) {
+        await ctx.db.insert("pastRecords", {
+          staffId: first.staffId,
+          from: first.periodFrom!,
+          to: first.periodTo ?? first.periodFrom!,
+          salary: group.reduce((a, p) => a + p.amount, 0),
+          bonus: 0,
+          deduction: 0,
+          paidOn: first.paidOn,
+          mode: first.mode,
+          note: group.length === 1 ? first.note : undefined,
+          createdBy: first.recordedBy,
+          createdAt: first.recordedAt,
+        });
+        touched.set(staff._id, staff.organizationId);
+        records += 1;
+      }
+      for (const p of group) await ctx.db.delete(p._id);
+    }
+    for (const [staffId, organizationId] of touched) {
+      await writeAudit(ctx, {
+        organizationId,
+        actorUserId: undefined,
+        action: "migration.past_entries_converted",
+        entityType: "staff",
+        entityId: staffId,
+        staffId: staffId as Id<"staff">,
+      });
+    }
+    return { records };
+  },
+});

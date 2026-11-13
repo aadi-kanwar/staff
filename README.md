@@ -28,19 +28,16 @@ tokens, its UI components, Vitest + convex-test.
 
 ## Past payments and payment details
 
-- **Record a past entry** (staff member → Paydays tab): a salary payment,
-  bonus or deduction from before, for the dates it was for. Nothing is
-  refused:
-  - A payment fills the pay periods in those dates (those with at least half
-    their days inside, else any that overlap), oldest first. Anything beyond
-    what they owe, or all of it if the dates have no pay period, is kept as
-    a past payment for those dates.
-  - A bonus or deduction goes on the first pay period in those dates
-    (changing what it pays); a bonus can be marked as already paid. With no
-    pay period in the dates it's kept as a past entry.
-  - Past entries with no pay period are history only (they never change
-    what's owed or the final settlement). They show in the Ledger, on the
-    staff member's Payments and as dashed green days on both calendars.
+- **Record a past payment** (staff member → Paydays tab): for the record
+  only. The dates it was for, the salary, plus any bonus, minus any
+  deduction, as one breakdown with its total, and optionally when and how it
+  was paid and a note. Records never count towards what's owed, the ledger,
+  payroll totals or reports (`convex/pastRecords.ts`, table `pastRecords`).
+  Their days are outlined (dashed green) on both calendars, which go back to
+  2 months before the joining date; staff see them under "Past payments" on
+  their Payments page, outside "Total paid". Entries saved by the earlier
+  version (as payments / adjustments) are converted into records on deploy
+  (`migrations:convertPastEntries`, run by the Vercel build).
 - **Salary payment details** (UPI ID and/or bank account: holder's name,
   account number, IFSC, bank): the admin sets them on the Profile tab. A
   staff member can send a change from their Profile; it waits for an admin.

@@ -99,6 +99,73 @@ export default function StaffPayments() {
           ))}
         </ul>
       )}
+      {data.pastRecords.length > 0 ? (
+        <section aria-labelledby="past-records" className="flex flex-col gap-2">
+          <h2 id="past-records" className="font-serif text-xl">
+            Past payments
+          </h2>
+          <p className="text-sm text-foreground-secondary">
+            Recorded by the office for your records. Not included in the total
+            above.
+          </p>
+          <ul className="flex flex-col gap-3" aria-label="Past payments">
+            {data.pastRecords.map((r) => (
+              <li key={r.recordId}>
+                <Card>
+                  <CardBody className="flex flex-col gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-sm text-foreground-secondary">
+                        For {formatDay(r.from, "d MMM")} –{" "}
+                        {formatDay(r.to, "d MMM yyyy")}
+                      </span>
+                      <span className="tabular font-serif text-2xl">
+                        {formatINR(r.total)}
+                      </span>
+                    </div>
+                    <DetailList
+                      rows={[
+                        { label: "Salary", value: formatINR(r.salary) },
+                        ...(r.bonus
+                          ? [
+                              {
+                                label: "Bonus",
+                                value: formatINR(r.bonus, { signed: true }),
+                              },
+                            ]
+                          : []),
+                        ...(r.deduction
+                          ? [
+                              {
+                                label: "Deduction",
+                                value: formatINR(-r.deduction, {
+                                  signed: true,
+                                }),
+                              },
+                            ]
+                          : []),
+                        {
+                          label: "Total paid",
+                          value: formatINR(r.total),
+                          strong: true,
+                        },
+                      ]}
+                    />
+                    {r.paidOn || r.note ? (
+                      <p className="text-sm text-foreground-secondary">
+                        {r.paidOn
+                          ? `Paid ${formatDay(r.paidOn, "d MMM yyyy")}${r.method ? ` · ${r.method}` : ""}`
+                          : ""}
+                        {r.paidOn && r.note ? " · " : ""}
+                        {r.note ?? ""}
+                      </p>
+                    ) : null}
+                  </CardBody>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </>
   );
 }
