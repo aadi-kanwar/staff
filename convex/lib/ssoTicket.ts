@@ -40,16 +40,27 @@ export type HubTicketSettings = {
 };
 
 export function hubTicketSettingsFromEnv(): HubTicketSettings {
-  return { publicKey: process.env.HUB_SSO_PUBLIC_KEY, hubOrigin: process.env.HUB_ORIGIN };
+  return {
+    publicKey: process.env.HUB_SSO_PUBLIC_KEY,
+    hubOrigin: process.env.HUB_ORIGIN,
+  };
 }
 
 /** The checked claims of a JWT the hub signed for `audience`, or null for any problem. */
-async function verifyHubJwt(token: string, settings: HubTicketSettings, audience: string) {
+async function verifyHubJwt(
+  token: string,
+  settings: HubTicketSettings,
+  audience: string,
+) {
   const { publicKey, hubOrigin } = settings;
-  if (!publicKey || !hubOrigin || token.length === 0 || token.length > 4096) return null;
+  if (!publicKey || !hubOrigin || token.length === 0 || token.length > 4096)
+    return null;
   try {
     // The key may be stored on one line with "\n" written out; turn those back into line breaks.
-    const key = await importSPKI(publicKey.replace(/\\n/g, "\n").trim(), "EdDSA");
+    const key = await importSPKI(
+      publicKey.replace(/\\n/g, "\n").trim(),
+      "EdDSA",
+    );
     const { payload } = await jwtVerify(token, key, {
       algorithms: ["EdDSA"],
       issuer: hubOrigin,
@@ -59,9 +70,11 @@ async function verifyHubJwt(token: string, settings: HubTicketSettings, audience
       requiredClaims: ["iss", "aud", "sub", "jti", "iat", "exp"],
     });
     const { jti, sub } = payload;
-    if (typeof jti !== "string" || jti.length === 0 || jti.length > 200) return null;
+    if (typeof jti !== "string" || jti.length === 0 || jti.length > 200)
+      return null;
     if (typeof sub !== "string" || sub.length === 0) return null;
-    const phone = typeof payload.phone === "string" ? normalizePhone(payload.phone) : null;
+    const phone =
+      typeof payload.phone === "string" ? normalizePhone(payload.phone) : null;
     if (phone === null) return null;
     return { payload, jti, sub, phone };
   } catch {
@@ -74,15 +87,29 @@ async function verifyHubJwt(token: string, settings: HubTicketSettings, audience
  * for a master admin; otherwise null. Callers must never tell the browser why
  * a ticket was refused.
  */
-export async function verifyHubTicket(ticket: string, settings: HubTicketSettings): Promise<HubTicket | null> {
+export async function verifyHubTicket(
+  ticket: string,
+  settings: HubTicketSettings,
+): Promise<HubTicket | null> {
   const checked = await verifyHubJwt(ticket, settings, SSO_APP_ID);
   if (checked === null || checked.payload.role !== "master_admin") return null;
-  const name = typeof checked.payload.name === "string" ? checked.payload.name.trim().slice(0, 80) : "";
-  return { jti: checked.jti, hubAdminId: checked.sub, phone: checked.phone, name: name.length > 0 ? name : "Admin" };
+  const name =
+    typeof checked.payload.name === "string"
+      ? checked.payload.name.trim().slice(0, 80)
+      : "";
+  return {
+    jti: checked.jti,
+    hubAdminId: checked.sub,
+    phone: checked.phone,
+    name: name.length > 0 ? name : "Admin",
+  };
 }
 
 /** A genuine, unexpired "Revoke in all apps" request for this app (audience "<app>-revoke"), or null. */
-export async function verifyHubRevoke(token: string, settings: HubTicketSettings): Promise<HubRevoke | null> {
+export async function verifyHubRevoke(
+  token: string,
+  settings: HubTicketSettings,
+): Promise<HubRevoke | null> {
   const checked = await verifyHubJwt(token, settings, `${SSO_APP_ID}-revoke`);
   return checked === null ? null : { jti: checked.jti, phone: checked.phone };
 }

@@ -310,6 +310,11 @@ export default function PayrollPage() {
                               : "Payday"}{" "}
                           {formatDay(row.dueDate)}
                         </span>
+                        {row.outstanding > 0 ? (
+                          <span className="text-sm text-foreground-secondary">
+                            Pay to: {row.payTo ?? "no payment details yet"}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         <span className="tabular font-semibold">

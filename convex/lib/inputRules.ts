@@ -27,7 +27,10 @@ export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
 /** Returns a plain-language problem with the password, or null if it is fine. */
-export function passwordProblem(password: string, phoneE164: string | null): string | null {
+export function passwordProblem(
+  password: string,
+  phoneE164: string | null,
+): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) {
     return `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
   }
@@ -50,7 +53,10 @@ export const phoneSchema = z
   .string()
   .trim()
   .min(1, "Enter your mobile number.")
-  .refine((value) => normalizePhone(value) !== null, "Enter a valid mobile number.");
+  .refine(
+    (value) => normalizePhone(value) !== null,
+    "Enter a valid mobile number.",
+  );
 
 export const displayNameSchema = z
   .string()
@@ -78,7 +84,10 @@ export const amountSchema = z
   .min(1, "Enter an amount above zero.")
   .max(10_000_000, "That amount looks too large.");
 
-export const noteSchema = z.string().trim().max(200, "Use at most 200 characters.");
+export const noteSchema = z
+  .string()
+  .trim()
+  .max(200, "Use at most 200 characters.");
 
 export const isoDateSchema = z
   .string()
@@ -87,6 +96,8 @@ export const isoDateSchema = z
     const [y, m, d] = value.split("-").map(Number);
     const date = new Date(Date.UTC(y, m - 1, d));
     return (
-      date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
+      date.getUTCFullYear() === y &&
+      date.getUTCMonth() === m - 1 &&
+      date.getUTCDate() === d
     );
   }, "Enter a real date.");

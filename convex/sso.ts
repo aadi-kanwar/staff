@@ -17,8 +17,16 @@ import { SSO_SESSION_MS, SSO_USED_TICKET_RETENTION_MS } from "./lib/ssoTicket";
  * switched off. No other account or record is changed.
  */
 export const acceptTicket = internalMutation({
-  args: { jti: v.string(), hubAdminId: v.string(), phone: v.string(), name: v.string() },
-  returns: v.union(v.null(), v.object({ userId: v.id("users"), sessionId: v.id("authSessions") })),
+  args: {
+    jti: v.string(),
+    hubAdminId: v.string(),
+    phone: v.string(),
+    name: v.string(),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({ userId: v.id("users"), sessionId: v.id("authSessions") }),
+  ),
   handler: async (ctx, { jti, hubAdminId, phone, name }) => {
     const now = Date.now();
 
@@ -61,21 +69,31 @@ export const acceptTicket = internalMutation({
     } else {
       user = existing;
       if (user.disabled === true || user.role === "staff") return null;
-      if (user.organizationId !== undefined && user.organizationId !== organization._id) return null;
+      if (
+        user.organizationId !== undefined &&
+        user.organizationId !== organization._id
+      )
+        return null;
       const changes: Partial<Doc<"users">> = {};
       if (user.role === undefined) {
         changes.role = "admin";
         roleGranted = true;
         if (user.name === undefined) changes.name = name;
       }
-      if (user.organizationId === undefined) changes.organizationId = organization._id;
-      if (Object.keys(changes).length > 0) await ctx.db.patch(user._id, changes);
+      if (user.organizationId === undefined)
+        changes.organizationId = organization._id;
+      if (Object.keys(changes).length > 0)
+        await ctx.db.patch(user._id, changes);
     }
     const userId: Id<"users"> = user._id;
 
     // 5. Mark the account, open a 12-hour login, and record it.
-    if (user.ssoManaged !== true) await ctx.db.patch(userId, { ssoManaged: true });
-    const sessionId = await ctx.db.insert("authSessions", { userId, expirationTime: now + SSO_SESSION_MS });
+    if (user.ssoManaged !== true)
+      await ctx.db.patch(userId, { ssoManaged: true });
+    const sessionId = await ctx.db.insert("authSessions", {
+      userId,
+      expirationTime: now + SSO_SESSION_MS,
+    });
     await writeAudit(ctx, {
       organizationId: organization._id,
       actorUserId: userId,
@@ -92,7 +110,11 @@ export const acceptTicket = internalMutation({
  * One use per ticket or revoke request: false if this `jti` was seen before
  * (and records it otherwise).
  */
-async function spendJti(ctx: MutationCtx, jti: string, now: number): Promise<boolean> {
+async function spendJti(
+  ctx: MutationCtx,
+  jti: string,
+  now: number,
+): Promise<boolean> {
   const used = await ctx.db
     .query("ssoUsedTickets")
     .withIndex("by_jti", (q) => q.eq("jti", jti))
@@ -107,7 +129,8 @@ async function spendJti(ctx: MutationCtx, jti: string, now: number): Promise<boo
  * exactly 12 hours (normal logins last far longer).
  */
 const isHubSession = (session: Doc<"authSessions">) =>
-  Math.abs(session.expirationTime - session._creationTime - SSO_SESSION_MS) <= 60_000;
+  Math.abs(session.expirationTime - session._creationTime - SSO_SESSION_MS) <=
+  60_000;
 
 /**
  * The hub's "Revoke in all apps" for one phone number: ends that account's
@@ -117,22 +140,33 @@ const isHubSession = (session: Doc<"authSessions">) =>
  */
 export const revokeAccess = internalMutation({
   args: { jti: v.string(), phone: v.string() },
-  returns: v.union(v.null(), v.object({ sessionsEnded: v.number(), adminRemoved: v.boolean() })),
+  returns: v.union(
+    v.null(),
+    v.object({ sessionsEnded: v.number(), adminRemoved: v.boolean() }),
+  ),
   handler: async (ctx, { jti, phone }) => {
     const now = Date.now();
     if (!(await spendJti(ctx, jti, now))) return null;
 
     let sessionsEnded = 0;
     let adminRemoved = false;
-    const users = await ctx.db.query("users").withIndex("phone", (q) => q.eq("phone", phone)).collect();
+    const users = await ctx.db
+      .query("users")
+      .withIndex("phone", (q) => q.eq("phone", phone))
+      .collect();
     for (const user of users) {
       if (user.ssoManaged !== true) continue;
 
-      for (const session of await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", user._id)).collect()) {
+      for (const session of await ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .collect()) {
         if (!isHubSession(session)) continue;
         const tokens = await ctx.db
           .query("authRefreshTokens")
-          .withIndex("sessionIdAndParentRefreshTokenId", (q) => q.eq("sessionId", session._id))
+          .withIndex("sessionIdAndParentRefreshTokenId", (q) =>
+            q.eq("sessionId", session._id),
+          )
           .collect();
         for (const token of tokens) await ctx.db.delete(token._id);
         await ctx.db.delete(session._id);
@@ -141,19 +175,41 @@ export const revokeAccess = internalMutation({
 
       const organizationId =
         user.organizationId ??
-        (await ctx.db.query("organizations").filter((q) => q.eq(q.field("status"), "active")).order("asc").first())?._id;
+        (
+          await ctx.db
+            .query("organizations")
+            .filter((q) => q.eq(q.field("status"), "active"))
+            .order("asc")
+            .first()
+        )?._id;
       const grantedByHub =
         organizationId !== undefined &&
         (
           await ctx.db
             .query("auditLog")
-            .withIndex("by_org_createdAt", (q) => q.eq("organizationId", organizationId))
-            .filter((q) => q.and(q.eq(q.field("action"), "sso.signed_in"), q.eq(q.field("entityId"), user._id)))
+            .withIndex("by_org_createdAt", (q) =>
+              q.eq("organizationId", organizationId),
+            )
+            .filter((q) =>
+              q.and(
+                q.eq(q.field("action"), "sso.signed_in"),
+                q.eq(q.field("entityId"), user._id),
+              ),
+            )
             .collect()
-        ).some((entry) => (entry.metadata as { roleGranted?: unknown } | undefined)?.roleGranted === true);
+        ).some(
+          (entry) =>
+            (entry.metadata as { roleGranted?: unknown } | undefined)
+              ?.roleGranted === true,
+        );
       const removeAdmin = grantedByHub && user.role === "admin";
       // Without a role the account can't be used at all (see access.canSignIn).
-      await ctx.db.patch(user._id, removeAdmin ? { ssoManaged: false, role: undefined } : { ssoManaged: false });
+      await ctx.db.patch(
+        user._id,
+        removeAdmin
+          ? { ssoManaged: false, role: undefined }
+          : { ssoManaged: false },
+      );
       if (removeAdmin) adminRemoved = true;
       await writeAudit(ctx, {
         organizationId,

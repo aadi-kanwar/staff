@@ -32,12 +32,16 @@ export const passwordCrypto = {
 const PhonePassword = ConvexCredentials<DataModel>({
   id: PHONE_PASSWORD_PROVIDER,
   authorize: async (params, ctx) => {
-    const phone = typeof params.phone === "string" ? normalizePhone(params.phone) : null;
+    const phone =
+      typeof params.phone === "string" ? normalizePhone(params.phone) : null;
     if (phone === null) throw appError("INVALID_PHONE");
     const password = typeof params.password === "string" ? params.password : "";
-    if (params.flow !== undefined && params.flow !== "signIn") throw appError("FORBIDDEN");
+    if (params.flow !== undefined && params.flow !== "signIn")
+      throw appError("FORBIDDEN");
 
-    const gate = await ctx.runMutation(internal.authLimits.checkAttempt, { phone });
+    const gate = await ctx.runMutation(internal.authLimits.checkAttempt, {
+      phone,
+    });
     if (!gate.allowed) throw appError("TOO_MANY_ATTEMPTS");
     return await signInExisting(ctx, phone, password);
   },
@@ -56,7 +60,9 @@ const HubSso = ConvexCredentials<DataModel>({
   id: HUB_SSO_PROVIDER,
   authorize: async (params, ctx) => {
     const ticket = typeof params.ticket === "string" ? params.ticket : "";
-    const claims = await ctx.runAction(internal.ssoNode.verifyTicket, { ticket });
+    const claims = await ctx.runAction(internal.ssoNode.verifyTicket, {
+      ticket,
+    });
     if (claims === null) throw appError("SSO_LINK_EXPIRED");
     const result = await ctx.runMutation(internal.sso.acceptTicket, claims);
     if (result === null) throw appError("SSO_LINK_EXPIRED");

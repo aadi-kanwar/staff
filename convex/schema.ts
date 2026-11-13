@@ -1,4 +1,5 @@
 import { authTables } from "@convex-dev/auth/server";
+import { vPayout, vPayoutRequest } from "./lib/payout";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
@@ -100,6 +101,10 @@ export default defineSchema({
     lastWorkingDay: v.optional(v.string()),
     reserveStatus: vReserveStatus,
     reserveForfeitReason: v.optional(v.string()),
+    /** Where their salary is paid (UPI / bank), as approved or set by an admin. */
+    payout: v.optional(vPayout),
+    /** A change they asked for, waiting for an admin's approval. */
+    payoutRequest: v.optional(vPayoutRequest),
     /** May mark attendance for the other staff of their property (set by an admin). */
     canMarkAttendance: v.optional(v.boolean()),
     /** Unmarked days before this date are not flagged (tracking hadn't begun for them). */
@@ -168,6 +173,9 @@ export default defineSchema({
     paidOn: v.string(),
     mode: vStoredPaymentMode,
     note: v.optional(v.string()),
+    /** Past payments entered by period: the salary period the admin said it was for. */
+    periodFrom: v.optional(v.string()),
+    periodTo: v.optional(v.string()),
     recordedBy: v.optional(v.id("users")),
     recordedAt: v.number(),
   })

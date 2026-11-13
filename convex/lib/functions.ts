@@ -76,7 +76,8 @@ export async function getViewer(ctx: ReadCtx): Promise<SignedInViewer | null> {
   const user = await ctx.db.get(userId);
   if (user === null) return null;
   // Admin Hub logins last 12 hours; end them exactly on time.
-  if (user.ssoManaged === true && session.expirationTime < Date.now()) return null;
+  if (user.ssoManaged === true && session.expirationTime < Date.now())
+    return null;
   return { userId, user };
 }
 
@@ -274,6 +275,20 @@ export const orgSetupMutation = customMutation(
 export const staffQuery = customQuery(
   rawQuery,
   customCtx(async (ctx) => ({ self: await requireSelf(ctx) })),
+);
+
+/**
+ * A working staff member changing something of their OWN that an admin then
+ * approves (convex/payoutRequests.ts). Never pay, attendance or anyone else.
+ */
+export const selfMutation = customMutation(
+  rawMutation,
+  customCtx(async (ctx) => {
+    const self = await requireSelf(ctx);
+    if (self.staff.status !== "active")
+      throw appError("FORBIDDEN", "This account is read-only now.");
+    return { self, db: guardedDb(ctx) };
+  }),
 );
 
 /** A working staff member with the attendance-marking permission. */

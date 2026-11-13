@@ -2,7 +2,7 @@
 
 import { useMutation } from "convex/react";
 import type { Id } from "@convex/_generated/dataModel";
-import { HandCoins, Plus } from "lucide-react";
+import { HandCoins, History, Plus } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Banner } from "@/components/ui/banner";
@@ -19,6 +19,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { toast } from "@/components/ui/toaster";
+import { useQuery } from "@/lib/convex";
 import { friendlyError } from "@/lib/errors";
 import { formatDay, formatINR, todayIn } from "@/lib/format";
 import { PAYMENT_MODE_LABEL } from "@/lib/labels";
@@ -336,6 +337,203 @@ export function AddAdjustmentDialog({
             </DialogClose>
             <Button type="submit" loading={busy}>
               Add adjustment
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Records a payment made before (outside the app) for a salary period: the
+ * admin gives the dates the salary was for, the amount, when it was paid and
+ * how. It's spread over that period's paydays, oldest first (previewed here).
+ */
+export function PastPaymentDialog({
+  staffId,
+  name,
+}: {
+  staffId: Id<"staff">;
+  name: string;
+}) {
+  const record = useMutation(api.payments.recordPast);
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paidOn, setPaidOn] = useState(todayIn());
+  const [mode, setMode] = useState<Mode>("cash");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const value = Number(amount);
+  const ready = from !== "" && to !== "" && from <= to;
+  const plan = useQuery(
+    api.payments.planPastPayment,
+    ready ? { staffId, from, to, amount: value > 0 ? value : 0 } : "skip",
+  );
+  const problem = !ready
+    ? null
+    : plan && plan.covered.length === 0
+      ? "Those dates don't cover any pay period."
+      : plan && value > plan.owed
+        ? `That's more than the ${formatINR(plan.owed)} still owed for those dates.`
+        : null;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) {
+          setFrom("");
+          setTo("");
+          setAmount("");
+          setPaidOn(todayIn());
+          setNote("");
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="secondary">
+          <Icon icon={History} />
+          Record a past payment
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title={`Past payment to ${name}`}
+        description="For salary already paid outside the app. Give the dates the salary was for; the amount is applied to the pay periods in those dates, oldest first."
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            try {
+              const result = await record({
+                staffId,
+                from,
+                to,
+                amount: value,
+                paidOn,
+                mode,
+                note: note.trim() || undefined,
+              });
+              toast.success(
+                `Recorded against ${result.paydays} ${result.paydays === 1 ? "payday" : "paydays"}.`,
+              );
+              setOpen(false);
+            } catch (error) {
+              toast.error(friendlyError(error));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="past-from" label="Salary for: from">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  required
+                />
+              )}
+            </Field>
+            <Field id="past-to" label="to">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  required
+                />
+              )}
+            </Field>
+            <Field id="past-amount" label="Amount paid (₹)">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={1}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              )}
+            </Field>
+            <Field id="past-paid-on" label="Paid on">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="date"
+                  max={todayIn()}
+                  value={paidOn}
+                  onChange={(e) => setPaidOn(e.target.value)}
+                  required
+                />
+              )}
+            </Field>
+          </div>
+          <PaymentModeSelect id="past-mode" value={mode} onChange={setMode} />
+          <Field
+            id="past-note"
+            label="Note (optional)"
+            hint="Shown to the staff member with the payment."
+          >
+            {(p) => (
+              <Input
+                {...p}
+                value={note}
+                maxLength={200}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. October salary"
+              />
+            )}
+          </Field>
+          {ready && plan && plan.covered.length > 0 ? (
+            <div
+              className="flex flex-col gap-1 rounded-md bg-subtle px-3 py-2 text-sm"
+              aria-label="How it will be applied"
+            >
+              <p className="font-medium">Pay periods in these dates</p>
+              {plan.covered.map((p) => (
+                <p key={p.key} className="flex justify-between gap-3">
+                  <span>
+                    {formatDay(p.cycleStartDate, "d MMM")} –{" "}
+                    {formatDay(p.cycleEndDate, "d MMM yyyy")}
+                    <span className="text-foreground-secondary">
+                      {" "}
+                      ·{" "}
+                      {p.outstanding <= 0
+                        ? "already paid"
+                        : `${formatINR(p.outstanding)} owed`}
+                    </span>
+                  </span>
+                  <span className="tabular font-medium">
+                    {p.apply > 0 ? formatINR(p.apply) : "–"}
+                  </span>
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {problem ? <Banner tone="danger">{problem}</Banner> : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={
+                !ready || !(value > 0) || problem !== null || plan === undefined
+              }
+            >
+              Record {value > 0 ? formatINR(value) : "payment"}
             </Button>
           </DialogFooter>
         </form>
