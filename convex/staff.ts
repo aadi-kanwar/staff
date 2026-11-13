@@ -207,9 +207,9 @@ export const payCalendar = staffQuery({
       today,
       absences,
       /** Past payments (records only): marked on the calendar. */
-      pastRecords: (await pastRecordsOf(ctx, staff._id)).map(
-        ({ from, to, total }) => ({ from, to, total }),
-      ),
+      pastRecords: (await pastRecordsOf(ctx, staff._id))
+        .filter((r) => !r.converted)
+        .map(({ from, to, total }) => ({ from, to, total })),
       joinDate: staff.joinDate,
       lastWorkingDay: staff.lastWorkingDay ?? null,
       status: staff.status,
@@ -257,6 +257,7 @@ export const payments = staffQuery({
       paydays: [...overdue, ...upcoming, ...past],
       /** Past payments, for the record only: not in the totals. */
       pastRecords: (await pastRecordsOf(ctx, staff._id))
+        .filter((r) => !r.converted)
         .map(
           ({
             recordId,

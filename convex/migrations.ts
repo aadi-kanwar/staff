@@ -131,6 +131,7 @@ export const convertPastEntries = internalMutation({
       if (paid) used.add(paid._id);
       if (staff) {
         await ctx.db.insert("pastRecords", {
+          source: "converted",
           staffId: a.staffId,
           from: a.periodFrom!,
           to: a.periodTo ?? a.periodFrom!,
@@ -161,6 +162,7 @@ export const convertPastEntries = internalMutation({
       const staff = await ctx.db.get(first.staffId);
       if (staff) {
         await ctx.db.insert("pastRecords", {
+          source: "converted",
           staffId: first.staffId,
           from: first.periodFrom!,
           to: first.periodTo ?? first.periodFrom!,

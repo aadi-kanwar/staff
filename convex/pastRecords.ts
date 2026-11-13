@@ -29,9 +29,21 @@ export async function pastRecordsOf(
     .sort((a, b) => a.from.localeCompare(b.from) || a.createdAt - b.createdAt);
 }
 
+/**
+ * Made from an entry saved with the earlier "Record a past entry" (not
+ * created with "Record a past payment"). Converted rows keep the original
+ * entry's time, so they were saved well after `createdAt`; newer conversions
+ * are marked with `source`.
+ */
+export function isConverted(r: Doc<"pastRecords">): boolean {
+  return r.source === "converted" || r._creationTime - r.createdAt > 60_000;
+}
+
 export function recordView(r: Doc<"pastRecords">) {
   return {
     recordId: r._id,
+    /** Converted from an earlier entry: listed for the admin, not shown on calendars or to staff. */
+    converted: isConverted(r),
     from: r.from,
     to: r.to,
     salary: r.salary,
