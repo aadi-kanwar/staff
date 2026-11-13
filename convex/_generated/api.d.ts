@@ -43,6 +43,7 @@ import type * as marking from "../marking.js";
 import type * as migrations from "../migrations.js";
 import type * as notifications from "../notifications.js";
 import type * as organization from "../organization.js";
+import type * as pastRecords from "../pastRecords.js";
 import type * as paydays from "../paydays.js";
 import type * as payments from "../payments.js";
 import type * as payoutRequests from "../payoutRequests.js";
@@ -95,6 +96,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   notifications: typeof notifications;
   organization: typeof organization;
+  pastRecords: typeof pastRecords;
   paydays: typeof paydays;
   payments: typeof payments;
   payoutRequests: typeof payoutRequests;

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import {
   createAdmin,
   createStaffMember,
@@ -7,7 +7,7 @@ import {
   setupTest,
 } from "./harness.test-utils";
 
-test("a past payment for a period settles that period's paydays, oldest first, and shows on the calendar", async () => {
+test("past payments are records only: one breakdown, on the calendars, never in the balance", async () => {
   const t = await setupTest("2027-06-20");
   const admin = await createAdmin(t);
   const s = await createStaffMember(t, admin, {
@@ -15,135 +15,93 @@ test("a past payment for a period settles that period's paydays, oldest first, a
     joinDate: "2027-03-20",
     payMode: "half_16day",
   });
-  const base = {
-    staffId: s.staffId,
-    paidOn: "2027-05-05",
-    mode: "cash" as const,
-  };
-
-  // 30 Mar – 15 Apr and 16 Apr – 1 May fall in these dates; ₹20,000 pays the first in full and ₹5,000 of the second.
-  const plan = await admin.as.query(api.payments.planPastPayment, {
-    staffId: s.staffId,
-    from: "2027-03-30",
-    to: "2027-05-01",
-    amount: 20_000,
-  });
-  expect(
-    plan.covered.map((p) => [p.cycleStartDate, p.cycleEndDate, p.apply]),
-  ).toEqual([
-    ["2027-03-30", "2027-04-15", 15_000],
-    ["2027-04-16", "2027-05-01", 5_000],
-  ]);
-  await admin.as.mutation(api.payments.recordPast, {
-    ...base,
-    from: "2027-03-30",
-    to: "2027-05-01",
-    amount: 20_000,
-  });
-
-  const cal = await s.as.query(api.staff.payCalendar, {});
-  expect(
-    cal.periods.slice(0, 2).map((p) => [p.date, p.state, p.remaining]),
-  ).toEqual([
-    ["2027-04-15", "paid", 0],
-    ["2027-05-01", "pending", 10_000],
-  ]);
-  const detail = (await admin.as.query(api.people.get, {
+  const before = (await admin.as.query(api.people.get, {
     staffId: s.staffId,
   }))!;
+
+  // Salary + bonus − deduction in one record; any dates (even before joining, even reversed).
+  await admin.as.mutation(api.pastRecords.add, {
+    staffId: s.staffId,
+    from: "2027-04-15",
+    to: "2027-03-30",
+    salary: 15_000,
+    bonus: 1_000,
+    deduction: 500,
+    paidOn: "2027-04-16",
+    mode: "upi",
+    note: "March salary",
+  });
+  await admin.as.mutation(api.pastRecords.add, {
+    staffId: s.staffId,
+    from: "2027-01-20",
+    to: "2027-02-19",
+    salary: 12_000,
+  });
+
+  const after = (await admin.as.query(api.people.get, { staffId: s.staffId }))!;
   expect(
-    detail.payments.map((p) => [p.amount, p.periodFrom, p.periodTo, p.note]),
-  ).toEqual(
-    expect.arrayContaining([
-      [
-        15_000,
-        "2027-03-30",
-        "2027-05-01",
-        "Past payment for 30 Mar – 15 Apr 2027",
-      ],
-      [
-        5_000,
-        "2027-03-30",
-        "2027-05-01",
-        "Past payment for 16 Apr – 1 May 2027",
-      ],
+    after.pastRecords.map((r) => [
+      r.from,
+      r.to,
+      r.salary,
+      r.bonus,
+      r.deduction,
+      r.total,
     ]),
+  ).toEqual([
+    ["2027-01-20", "2027-02-19", 12_000, 0, 0, 12_000],
+    ["2027-03-30", "2027-04-15", 15_000, 1_000, 500, 15_500],
+  ]);
+  // Nothing about pay changes: no payments, same paydays and balance, same monthly totals.
+  expect(after.payments).toEqual([]);
+  expect(after.schedule.pending).toBe(before.schedule.pending);
+  expect(after.schedule.paydays.map((p) => p.outstanding)).toEqual(
+    before.schedule.paydays.map((p) => p.outstanding),
   );
-
-  // Nothing is refused. More than is owed: the rest is kept as a past payment for those dates.
-  await admin.as.mutation(api.payments.recordPast, {
-    ...base,
-    from: "2027-04-16",
-    to: "2027-05-01",
-    amount: 10_001,
-  });
-  // Dates with no pay period (the Joining Reserve days), even a reversed range: kept as a past payment.
-  await admin.as.mutation(api.payments.recordPast, {
-    ...base,
-    from: "2027-03-25",
-    to: "2027-03-20",
-    amount: 500,
-  });
-  const after = await s.as.query(api.staff.payCalendar, {});
-  expect(after.periods[1]).toMatchObject({ state: "paid", remaining: 0 });
-  expect(after.pastEntries).toEqual([
-    { kind: "payment", from: "2027-03-20", to: "2027-03-25", amount: 500 },
-    { kind: "payment", from: "2027-04-16", to: "2027-05-01", amount: 1 },
-  ]);
-  // Shown on the staff member's Payments too, and nothing more is owed because of it.
-  const list = await s.as.query(api.staff.payments, {});
   expect(
-    list.paydays
-      .filter((r) => r.title === "Past payment")
-      .map((r) => r.amount)
-      .sort(),
-  ).toEqual([1, 500]);
-  expect(
-    (await admin.as.query(api.people.get, { staffId: s.staffId }))!.schedule
-      .unsettledAdjustments,
-  ).toEqual([]);
-});
+    (
+      await admin.as.query(api.paydays.range, {
+        from: "2027-04-01",
+        to: "2027-04-30",
+      })
+    ).month.paid,
+  ).toBe(0);
 
-test("monthly pay: a calendar month entered as 1st to 31st covers that month", async () => {
-  const t = await setupTest("2027-06-20");
-  const admin = await createAdmin(t);
-  const s = await createStaffMember(t, admin, {
-    name: "Ravi",
-    joinDate: "2027-03-20",
-    payMode: "monthly_10th",
-    monthlySalary: 30_000,
-  });
-  await admin.as.mutation(api.payments.recordPast, {
-    staffId: s.staffId,
-    from: "2027-05-01",
-    to: "2027-05-31",
-    amount: 30_000,
-    paidOn: "2027-06-10",
-    mode: "bank",
-    note: "May salary",
-  });
-  const may = (await admin.as.query(api.people.get, {
-    staffId: s.staffId,
-  }))!.schedule.paydays.find((p) => p.cycleStartDate === "2027-05-01")!;
-  expect([may.dueDate, may.status, may.outstanding]).toEqual([
-    "2027-06-10",
-    "paid",
-    0,
+  // The staff member sees them on the calendar and in their payment history, outside the totals.
+  const cal = await s.as.query(api.staff.payCalendar, {});
+  expect(cal.pastRecords).toEqual([
+    { from: "2027-01-20", to: "2027-02-19", total: 12_000 },
+    { from: "2027-03-30", to: "2027-04-15", total: 15_500 },
   ]);
-  const other = await createAdmin(t, "Other", "Org B");
+  const history = await s.as.query(api.staff.payments, {});
+  expect(history.pastRecords.map((r) => [r.total, r.method, r.note])).toEqual([
+    [15_500, "UPI", "March salary"],
+    [12_000, null, null],
+  ]);
+  expect(history.totalPaid).toBe(0);
+
   expect(
     await errorCode(
-      other.as.query(api.payments.planPastPayment, {
+      admin.as.mutation(api.pastRecords.add, {
         staffId: s.staffId,
-        from: "2027-05-01",
-        to: "2027-05-31",
-        amount: 1,
+        from: "2027-01-01",
+        to: "2027-01-31",
+        salary: 0,
       }),
     ),
+  ).toBe("INVALID_INPUT");
+  const other = await createAdmin(t, "Other", "Org B");
+  const recordId = after.pastRecords[0].recordId;
+  expect(
+    await errorCode(other.as.mutation(api.pastRecords.remove, { recordId })),
   ).toBe("NOT_FOUND");
+  await admin.as.mutation(api.pastRecords.remove, { recordId });
+  expect(
+    (await admin.as.query(api.people.get, { staffId: s.staffId }))!.pastRecords,
+  ).toHaveLength(1);
 });
 
-test("past bonuses and deductions go on the pay period of their dates, or are kept as history", async () => {
+test("entries saved the earlier way (payments / adjustments on paydays) become records and leave the balance", async () => {
   const t = await setupTest("2027-06-20");
   const admin = await createAdmin(t);
   const s = await createStaffMember(t, admin, {
@@ -151,50 +109,102 @@ test("past bonuses and deductions go on the pay period of their dates, or are ke
     joinDate: "2027-03-20",
     payMode: "half_16day",
   });
-  // A bonus for 2–17 May, already paid with that salary: the payday's net goes up by 500 and 500 is paid.
-  await admin.as.mutation(api.payments.recordPast, {
-    staffId: s.staffId,
-    kind: "bonus",
-    from: "2027-05-02",
-    to: "2027-05-17",
-    amount: 500,
-    alreadyPaid: true,
-    paidOn: "2027-05-17",
-    mode: "upi",
-  });
-  // A deduction for 18 May – 3 Jun (not paid yet): that payday's net goes down.
-  await admin.as.mutation(api.payments.recordPast, {
-    staffId: s.staffId,
-    kind: "deduction",
-    from: "2027-05-18",
-    to: "2027-06-03",
-    amount: 1_000,
-    note: "Broken mixer",
-  });
-  const paydays = (await admin.as.query(api.people.get, {
-    staffId: s.staffId,
-  }))!.schedule.paydays;
-  const may17 = paydays.find((p) => p.dueDate === "2027-05-17")!;
-  const jun3 = paydays.find((p) => p.dueDate === "2027-06-03")!;
-  expect([may17.bonus, may17.net, may17.paid]).toEqual([500, 15_500, 500]);
-  expect([jun3.deduction, jun3.net]).toEqual([1_000, 14_000]);
-  // Dates with no pay period: kept as history, not carried into the final settlement.
-  await admin.as.mutation(api.payments.recordPast, {
-    staffId: s.staffId,
-    kind: "deduction",
-    from: "2027-03-20",
-    to: "2027-03-22",
-    amount: 200,
-  });
   const detail = (await admin.as.query(api.people.get, {
     staffId: s.staffId,
   }))!;
-  expect(detail.pastEntries.map((e) => [e.kind, e.amount])).toEqual([
-    ["deduction", 200],
+  const [p1, p2] = detail.schedule.paydays;
+  await t.run(async (ctx) => {
+    const at = 1_000;
+    const common = {
+      staffId: s.staffId,
+      paidOn: "2027-05-05",
+      mode: "cash" as const,
+      periodFrom: "2027-03-30",
+      periodTo: "2027-05-01",
+      recordedAt: at,
+    };
+    await ctx.db.insert("payments", {
+      ...common,
+      paydayKey: p1.key,
+      amount: 15_000,
+      note: "Past payment",
+    });
+    await ctx.db.insert("payments", {
+      ...common,
+      paydayKey: p2.key,
+      amount: 5_000,
+      note: "Past payment",
+    });
+    // A bonus "already paid" (adjustment + payment saved together) and a deduction.
+    const bonus = {
+      staffId: s.staffId,
+      periodFrom: "2027-05-02",
+      periodTo: "2027-05-17",
+      createdAt: 2_000,
+    };
+    await ctx.db.insert("adjustments", {
+      ...bonus,
+      type: "bonus",
+      amount: 500,
+      note: "Diwali",
+      date: "2027-05-17",
+      paydayKey: p2.key,
+    });
+    await ctx.db.insert("payments", {
+      staffId: s.staffId,
+      paydayKey: p2.key,
+      amount: 500,
+      paidOn: "2027-05-17",
+      mode: "upi",
+      periodFrom: "2027-05-02",
+      periodTo: "2027-05-17",
+      recordedAt: 2_000,
+    });
+    await ctx.db.insert("adjustments", {
+      staffId: s.staffId,
+      type: "deduction",
+      amount: 200,
+      note: "Breakage",
+      date: "2027-03-22",
+      paydayKey: `${s.staffId}:past`,
+      periodFrom: "2027-03-20",
+      periodTo: "2027-03-22",
+      createdAt: 3_000,
+    });
+    // An ordinary payment stays as it is.
+    await ctx.db.insert("payments", {
+      staffId: s.staffId,
+      paydayKey: p1.key,
+      amount: 100,
+      paidOn: "2027-04-15",
+      mode: "cash",
+      recordedAt: 4_000,
+    });
+  });
+
+  expect(await t.mutation(internal.migrations.convertPastEntries, {})).toEqual({
+    records: 3,
+  });
+  expect(await t.mutation(internal.migrations.convertPastEntries, {})).toEqual({
+    records: 0,
+  });
+  const after = (await admin.as.query(api.people.get, { staffId: s.staffId }))!;
+  expect(
+    after.pastRecords.map((r) => [
+      r.from,
+      r.salary,
+      r.bonus,
+      r.deduction,
+      r.paidOn,
+      r.mode,
+    ]),
+  ).toEqual([
+    ["2027-03-20", 0, 0, 200, null, null],
+    ["2027-03-30", 20_000, 0, 0, "2027-05-05", "cash"],
+    ["2027-05-02", 0, 500, 0, "2027-05-17", "upi"],
   ]);
-  expect(detail.schedule.unsettledAdjustments).toEqual([]);
-  const list = await s.as.query(api.staff.payments, {});
-  expect(list.paydays.find((r) => r.title === "Past deduction")?.amount).toBe(
-    -200,
+  expect(after.payments.map((p) => p.amount)).toEqual([100]);
+  expect(await t.run((ctx) => ctx.db.query("adjustments").collect())).toEqual(
+    [],
   );
 });

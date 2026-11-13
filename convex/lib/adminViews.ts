@@ -3,7 +3,7 @@ import type { QueryCtx } from "../_generated/server";
 import { addRealDays } from "./companyCalendar";
 import { payoutSummary } from "./payout";
 import { PAY_MODE_LABELS, type Payday, type Schedule } from "./payroll";
-import { allStaff, pastEntriesOf, scheduleFor } from "./staffData";
+import { allStaff, scheduleFor } from "./staffData";
 
 /** One payday as the admin payroll screens show it (admin only: includes cycle details). */
 export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
@@ -189,15 +189,6 @@ export async function paydaysBetween(
     for (const pay of payments)
       if (pay.mode !== "opening" && inMonth(pay.paidOn))
         figures.paid += pay.amount;
-    // Past payments for dates with no pay period count too.
-    for (const e of await pastEntriesOf(ctx, staff))
-      if (
-        e.kind === "payment" &&
-        e.mode !== "opening" &&
-        e.paidOn &&
-        inMonth(e.paidOn)
-      )
-        figures.paid += e.amount;
   }
   const byDate = (a: PaydayRow | SettlementRow, b: PaydayRow | SettlementRow) =>
     a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name);

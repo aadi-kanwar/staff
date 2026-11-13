@@ -185,6 +185,24 @@ export default defineSchema({
     .index("by_staff", ["staffId"])
     .index("by_payday", ["paydayKey"]),
 
+  // Past payments, for the record only: what was paid before (outside the
+  // app) for a period, as one breakdown (salary + bonus − deduction). They
+  // never count towards what's owed, the ledger or any totals; they're shown
+  // on the calendars and in the payment history.
+  pastRecords: defineTable({
+    staffId: v.id("staff"),
+    from: v.string(), // the period it was for
+    to: v.string(),
+    salary: v.number(), // whole rupees, ≥ 0
+    bonus: v.number(),
+    deduction: v.number(),
+    paidOn: v.optional(v.string()),
+    mode: v.optional(vStoredPaymentMode),
+    note: v.optional(v.string()),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+  }).index("by_staff", ["staffId"]),
+
   // Phones/browsers that receive notifications. One per endpoint.
   pushSubscriptions: defineTable({
     organizationId: v.id("organizations"),
