@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BadgeAlert,
   ClipboardCheck,
   DoorOpen,
   KeyRound,
@@ -23,6 +24,7 @@ import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { useQuery } from "@/lib/convex";
+import { cn } from "@/lib/utils";
 import {
   usePropertyScope,
   useShowProperty,
@@ -124,7 +126,11 @@ export default function StaffListPage() {
               <li key={row.staffId}>
                 <Link
                   href={`/admin/staff/${row.staffId}`}
-                  className="flex flex-col gap-2 px-4 py-3 hover:bg-subtle sm:flex-row sm:items-center sm:justify-between"
+                  className={cn(
+                    "flex flex-col gap-2 px-4 py-3 hover:bg-subtle sm:flex-row sm:items-center sm:justify-between",
+                    row.payoutPending &&
+                      "border-l-4 border-warning-border bg-warning-subtle/60",
+                  )}
                 >
                   <div className="flex min-w-0 flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -132,6 +138,11 @@ export default function StaffListPage() {
                       {row.lastWorkingDay && row.status === "active" ? (
                         <StatusBadge tone="warning" icon={DoorOpen}>
                           Last day {formatDay(row.lastWorkingDay)}
+                        </StatusBadge>
+                      ) : null}
+                      {row.payoutPending ? (
+                        <StatusBadge tone="warning" icon={BadgeAlert}>
+                          Payment details to approve
                         </StatusBadge>
                       ) : null}
                       {row.canMarkAttendance && row.status === "active" ? (

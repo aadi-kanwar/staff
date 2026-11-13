@@ -16,19 +16,34 @@ export const FAILED_ATTEMPTS_WINDOW_MS = 15 * 60 * 1000;
 
 const failKey = (phone: string) => `fail:${phone}`;
 
-async function currentCount(ctx: MutationCtx, key: string, windowMs: number, now: number) {
+async function currentCount(
+  ctx: MutationCtx,
+  key: string,
+  windowMs: number,
+  now: number,
+) {
   const row = await ctx.db
     .query("authAttemptLimits")
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
-  if (row === null || now - row.windowStart >= windowMs) return { row, count: 0 };
+  if (row === null || now - row.windowStart >= windowMs)
+    return { row, count: 0 };
   return { row, count: row.count };
 }
 
-async function increment(ctx: MutationCtx, key: string, windowMs: number, now: number) {
+async function increment(
+  ctx: MutationCtx,
+  key: string,
+  windowMs: number,
+  now: number,
+) {
   const { row, count } = await currentCount(ctx, key, windowMs, now);
   if (row === null) {
-    await ctx.db.insert("authAttemptLimits", { key, windowStart: now, count: 1 });
+    await ctx.db.insert("authAttemptLimits", {
+      key,
+      windowStart: now,
+      count: 1,
+    });
   } else if (count === 0) {
     await ctx.db.patch(row._id, { windowStart: now, count: 1 });
   } else {
@@ -40,7 +55,12 @@ export const checkAttempt = internalMutation({
   args: { phone: v.string() },
   returns: v.object({ allowed: v.boolean() }),
   handler: async (ctx, { phone }) => {
-    const failures = await currentCount(ctx, failKey(phone), FAILED_ATTEMPTS_WINDOW_MS, Date.now());
+    const failures = await currentCount(
+      ctx,
+      failKey(phone),
+      FAILED_ATTEMPTS_WINDOW_MS,
+      Date.now(),
+    );
     return { allowed: failures.count < FAILED_ATTEMPTS_LIMIT };
   },
 });

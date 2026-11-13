@@ -95,6 +95,25 @@ export default function AdminDashboard() {
         </Link>
       ) : null}
 
+      {data.payoutApprovals.length > 0 ? (
+        <Banner
+          tone="warning"
+          title="Payment details waiting for your approval"
+        >
+          <span className="flex flex-wrap gap-x-3 gap-y-1">
+            {data.payoutApprovals.map((p) => (
+              <Link
+                key={p.staffId}
+                href={`/admin/staff/${p.staffId}?tab=profile`}
+                className="font-medium underline underline-offset-4"
+              >
+                {p.name}
+              </Link>
+            ))}
+          </span>
+        </Banner>
+      ) : null}
+
       {data.settlementsWaiting.map((s) => (
         <Banner
           key={s.staffId}

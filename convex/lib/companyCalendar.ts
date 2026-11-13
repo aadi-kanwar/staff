@@ -22,7 +22,8 @@ export const DAYS_PER_MONTH = 30;
 export const DAYS_PER_YEAR = 360;
 
 function assertInt(name: string, value: number) {
-  if (!Number.isInteger(value)) throw new Error(`${name} must be an integer, got ${value}`);
+  if (!Number.isInteger(value))
+    throw new Error(`${name} must be an integer, got ${value}`);
 }
 
 export function dayIndex(y: number, m: number, d: number): number {
@@ -30,7 +31,8 @@ export function dayIndex(y: number, m: number, d: number): number {
   assertInt("m", m);
   assertInt("d", d);
   if (m < 1 || m > 12) throw new Error(`Month out of range: ${m}`);
-  if (d < 1 || d > DAYS_PER_MONTH) throw new Error(`Company day out of range: ${d}`);
+  if (d < 1 || d > DAYS_PER_MONTH)
+    throw new Error(`Company day out of range: ${d}`);
   return y * DAYS_PER_YEAR + (m - 1) * DAYS_PER_MONTH + (d - 1);
 }
 
@@ -73,7 +75,8 @@ export function parseIsoDate(date: string): CompanyDate {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!match) throw new Error(`Not a YYYY-MM-DD date: ${date}`);
   const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  if (m < 1 || m > 12 || d < 1 || d > realDaysInMonth(y, m)) throw new Error(`Not a real date: ${date}`);
+  if (m < 1 || m > 12 || d < 1 || d > realDaysInMonth(y, m))
+    throw new Error(`Not a real date: ${date}`);
   return { y, m, d };
 }
 
@@ -135,5 +138,7 @@ export function addRealDays(date: string, days: number): string {
 
 /** Every real date of a real month, in order. */
 export function realDatesOfMonth(y: number, m: number): string[] {
-  return Array.from({ length: realDaysInMonth(y, m) }, (_, i) => isoDate(y, m, i + 1));
+  return Array.from({ length: realDaysInMonth(y, m) }, (_, i) =>
+    isoDate(y, m, i + 1),
+  );
 }

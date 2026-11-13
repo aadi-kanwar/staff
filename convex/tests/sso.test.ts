@@ -1,4 +1,10 @@
-import { exportSPKI, generateKeyPair, SignJWT, type CryptoKey, type JWTPayload } from "jose";
+import {
+  exportSPKI,
+  generateKeyPair,
+  SignJWT,
+  type CryptoKey,
+  type JWTPayload,
+} from "jose";
 import { beforeAll, describe, expect, test } from "vitest";
 import { api, internal } from "../_generated/api";
 import { SSO_SESSION_MS } from "../lib/ssoTicket";
@@ -22,7 +28,9 @@ beforeAll(async () => {
   hubKey = hub.privateKey;
   otherKey = (await generateKeyPair("EdDSA", { extractable: true })).privateKey;
   // Stored the way it is on the real deployment: one line, "\n" written out.
-  process.env.HUB_SSO_PUBLIC_KEY = (await exportSPKI(hub.publicKey)).trim().replace(/\n/g, "\\n");
+  process.env.HUB_SSO_PUBLIC_KEY = (await exportSPKI(hub.publicKey))
+    .trim()
+    .replace(/\n/g, "\\n");
   process.env.HUB_ORIGIN = HUB;
 });
 
@@ -44,8 +52,11 @@ async function ticket(overrides: JWTPayload = {}, key: CryptoKey = hubKey) {
     exp: now + 60,
     ...overrides,
   };
-  for (const [k, value] of Object.entries(claims)) if (value === undefined) delete claims[k];
-  return await new SignJWT(claims).setProtectedHeader({ alg: "EdDSA" }).sign(key);
+  for (const [k, value] of Object.entries(claims))
+    if (value === undefined) delete claims[k];
+  return await new SignJWT(claims)
+    .setProtectedHeader({ alg: "EdDSA" })
+    .sign(key);
 }
 
 const ssoSignIn = (t: T, value: string) =>
@@ -58,7 +69,12 @@ async function setup() {
 }
 
 const userByPhone = (t: T, phone: string) =>
-  t.run((ctx) => ctx.db.query("users").withIndex("phone", (q) => q.eq("phone", phone)).first());
+  t.run((ctx) =>
+    ctx.db
+      .query("users")
+      .withIndex("phone", (q) => q.eq("phone", phone))
+      .first(),
+  );
 
 describe("Admin Hub sign-in (hub-sso)", () => {
   test("a valid ticket creates an admin of the organisation and signs in for 12 hours", async () => {
@@ -77,15 +93,28 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     expect(user.mustChangePassword).toBeUndefined();
 
     const sessions = await t.run((ctx) =>
-      ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", user._id)).collect(),
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .collect(),
     );
     expect(sessions).toHaveLength(1);
-    expect(sessions[0].expirationTime - Date.now()).toBeLessThanOrEqual(SSO_SESSION_MS + 1000);
-    expect(sessions[0].expirationTime - Date.now()).toBeGreaterThan(SSO_SESSION_MS - 60_000);
+    expect(sessions[0].expirationTime - Date.now()).toBeLessThanOrEqual(
+      SSO_SESSION_MS + 1000,
+    );
+    expect(sessions[0].expirationTime - Date.now()).toBeGreaterThan(
+      SSO_SESSION_MS - 60_000,
+    );
 
-    const audit = (await t.run((ctx) => ctx.db.query("auditLog").collect())).filter((a) => a.action === "sso.signed_in");
+    const audit = (
+      await t.run((ctx) => ctx.db.query("auditLog").collect())
+    ).filter((a) => a.action === "sso.signed_in");
     expect(audit).toHaveLength(1);
-    expect(audit[0].metadata).toMatchObject({ hubAdminId: "hubAdmin123", accountCreated: true, roleGranted: true });
+    expect(audit[0].metadata).toMatchObject({
+      hubAdminId: "hubAdmin123",
+      accountCreated: true,
+      roleGranted: true,
+    });
 
     // The new admin can use admin screens straight away.
     const as = t.withIdentity({ subject: `${user._id}|${sessions[0]._id}` });
@@ -98,30 +127,42 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     await ssoSignIn(t, await ticket());
     const user = (await userByPhone(t, PHONE))!;
     const session = (await t.run((ctx) =>
-      ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", user._id)).first(),
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .first(),
     ))!;
     const as = t.withIdentity({ subject: `${user._id}|${session._id}` });
     expect(await as.query(api.users.me, {})).not.toBeNull();
-    await t.run((ctx) => ctx.db.patch(session._id, { expirationTime: Date.now() - 1 }));
+    await t.run((ctx) =>
+      ctx.db.patch(session._id, { expirationTime: Date.now() - 1 }),
+    );
     expect(await as.query(api.users.me, {})).toBeNull();
   });
 
   test("an existing admin signs in unchanged apart from the hub mark", async () => {
     const { t, admin } = await setup();
     const before = (await t.run((ctx) => ctx.db.get(admin.userId)))!;
-    await ssoSignIn(t, await ticket({ phone: admin.phone, name: "Different Name" }));
+    await ssoSignIn(
+      t,
+      await ticket({ phone: admin.phone, name: "Different Name" }),
+    );
     const after = (await t.run((ctx) => ctx.db.get(admin.userId)))!;
     expect(after).toEqual({ ...before, ssoManaged: true });
   });
 
   test("a staff member's number is refused and their account is left exactly as it was", async () => {
     const { t, admin } = await setup();
-    const member = await createStaffMember(t, admin, { canMarkAttendance: true });
+    const member = await createStaffMember(t, admin, {
+      canMarkAttendance: true,
+    });
     const before = await t.run(async (ctx) => ({
       user: await ctx.db.get(member.userId),
       staff: await ctx.db.get(member.staffId),
     }));
-    expect(await errorCode(ssoSignIn(t, await ticket({ phone: member.phone })))).toBe("SSO_LINK_EXPIRED");
+    expect(
+      await errorCode(ssoSignIn(t, await ticket({ phone: member.phone }))),
+    ).toBe("SSO_LINK_EXPIRED");
     const after = await t.run(async (ctx) => ({
       user: await ctx.db.get(member.userId),
       staff: await ctx.db.get(member.staffId),
@@ -132,7 +173,9 @@ describe("Admin Hub sign-in (hub-sso)", () => {
   test("a switched-off admin is refused and stays switched off", async () => {
     const { t, admin } = await setup();
     await t.run((ctx) => ctx.db.patch(admin.userId, { disabled: true }));
-    expect(await errorCode(ssoSignIn(t, await ticket({ phone: admin.phone })))).toBe("SSO_LINK_EXPIRED");
+    expect(
+      await errorCode(ssoSignIn(t, await ticket({ phone: admin.phone }))),
+    ).toBe("SSO_LINK_EXPIRED");
     const user = (await t.run((ctx) => ctx.db.get(admin.userId)))!;
     expect(user.disabled).toBe(true);
     expect(user.ssoManaged).toBeUndefined();
@@ -143,9 +186,14 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     const now = Math.floor(Date.now() / 1000);
     const valid = await ticket();
     const [header, payload, signature] = valid.split(".");
-    const forged = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    const forged = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    );
     forged.phone = "+919800000000";
-    const tamperedPayload = btoa(JSON.stringify(forged)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const tamperedPayload = btoa(JSON.stringify(forged))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
 
     const bad: Record<string, string> = {
       expired: await ticket({ iat: now - 100, exp: now - 40 }),
@@ -161,15 +209,22 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     };
     const usersBefore = await t.run((ctx) => ctx.db.query("users").collect());
     for (const [name, value] of Object.entries(bad)) {
-      expect(await errorCode(ssoSignIn(t, value)), name).toBe("SSO_LINK_EXPIRED");
+      expect(await errorCode(ssoSignIn(t, value)), name).toBe(
+        "SSO_LINK_EXPIRED",
+      );
     }
-    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual(usersBefore);
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual(
+      usersBefore,
+    );
   });
 
   test("a ticket only 20 seconds past its expiry is still accepted (clock allowance)", async () => {
     const { t } = await setup();
     const now = Math.floor(Date.now() / 1000);
-    const result = await ssoSignIn(t, await ticket({ iat: now - 80, exp: now - 20 }));
+    const result = await ssoSignIn(
+      t,
+      await ticket({ iat: now - 80, exp: now - 20 }),
+    );
     expect(result.tokens?.token).toBeTruthy();
   });
 
@@ -183,8 +238,14 @@ describe("Admin Hub sign-in (hub-sso)", () => {
   test("used tickets are forgotten after 10 minutes", async () => {
     const { t } = await setup();
     await t.run(async (ctx) => {
-      await ctx.db.insert("ssoUsedTickets", { jti: "old", usedAt: Date.now() - 11 * 60_000 });
-      await ctx.db.insert("ssoUsedTickets", { jti: "recent", usedAt: Date.now() - 60_000 });
+      await ctx.db.insert("ssoUsedTickets", {
+        jti: "old",
+        usedAt: Date.now() - 11 * 60_000,
+      });
+      await ctx.db.insert("ssoUsedTickets", {
+        jti: "recent",
+        usedAt: Date.now() - 60_000,
+      });
     });
     await t.mutation(internal.sso.deleteOldTickets, {});
     const left = await t.run((ctx) => ctx.db.query("ssoUsedTickets").collect());
@@ -196,7 +257,9 @@ describe("Admin Hub sign-in (hub-sso)", () => {
     const saved = process.env.HUB_SSO_PUBLIC_KEY;
     delete process.env.HUB_SSO_PUBLIC_KEY;
     try {
-      expect(await errorCode(ssoSignIn(t, await ticket()))).toBe("SSO_LINK_EXPIRED");
+      expect(await errorCode(ssoSignIn(t, await ticket()))).toBe(
+        "SSO_LINK_EXPIRED",
+      );
     } finally {
       process.env.HUB_SSO_PUBLIC_KEY = saved;
     }
@@ -216,16 +279,30 @@ describe("Admin Hub sign-in (hub-sso)", () => {
 
 /** A "Revoke in all apps" token as the hub signs it. */
 const revokeToken = (overrides: JWTPayload = {}, key: CryptoKey = hubKey) =>
-  ticket({ aud: "staff-revoke", role: undefined, name: undefined, ...overrides }, key);
+  ticket(
+    { aud: "staff-revoke", role: undefined, name: undefined, ...overrides },
+    key,
+  );
 
 const callRevoke = (t: T, token?: string) =>
-  t.fetch("/sso/revoke", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  t.fetch("/sso/revoke", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
 const hubSessions = async (t: T, phone: string) => {
   const user = (await userByPhone(t, phone))!;
   return (
-    await t.run((ctx) => ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", user._id)).collect())
-  ).filter((s) => Math.abs(s.expirationTime - s._creationTime - SSO_SESSION_MS) <= 60_000);
+    await t.run((ctx) =>
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .collect(),
+    )
+  ).filter(
+    (s) =>
+      Math.abs(s.expirationTime - s._creationTime - SSO_SESSION_MS) <= 60_000,
+  );
 };
 
 describe("Revoke in all apps (/sso/revoke)", () => {
@@ -238,14 +315,22 @@ describe("Revoke in all apps (/sso/revoke)", () => {
 
     const response = await callRevoke(t, await revokeToken());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, sessionsEnded: 1, adminRemoved: true });
+    expect(await response.json()).toEqual({
+      ok: true,
+      sessionsEnded: 1,
+      adminRemoved: true,
+    });
 
     expect(await as.query(api.users.me, {})).toBeNull();
     const user = (await userByPhone(t, PHONE))!;
     expect(user.role).toBeUndefined();
     expect(user.ssoManaged).toBe(false);
-    expect(await t.run((ctx) => ctx.db.query("authRefreshTokens").collect())).toHaveLength(0);
-    const audit = (await t.run((ctx) => ctx.db.query("auditLog").collect())).map((a) => a.action);
+    expect(
+      await t.run((ctx) => ctx.db.query("authRefreshTokens").collect()),
+    ).toHaveLength(0);
+    const audit = (
+      await t.run((ctx) => ctx.db.query("auditLog").collect())
+    ).map((a) => a.action);
     expect(audit).toContain("sso.access_revoked");
 
     // Reactivated in the hub later: signing in through the hub works again.
@@ -256,8 +341,15 @@ describe("Revoke in all apps (/sso/revoke)", () => {
   test("an admin who had their own account keeps it and their password login", async () => {
     const { t, admin } = await setup();
     await ssoSignIn(t, await ticket({ phone: admin.phone }));
-    const response = await callRevoke(t, await revokeToken({ phone: admin.phone }));
-    expect(await response.json()).toEqual({ ok: true, sessionsEnded: 1, adminRemoved: false });
+    const response = await callRevoke(
+      t,
+      await revokeToken({ phone: admin.phone }),
+    );
+    expect(await response.json()).toEqual({
+      ok: true,
+      sessionsEnded: 1,
+      adminRemoved: false,
+    });
     expect(await hubSessions(t, admin.phone)).toHaveLength(0);
     const user = (await t.run((ctx) => ctx.db.get(admin.userId)))!;
     expect(user.role).toBe("admin");
@@ -270,9 +362,15 @@ describe("Revoke in all apps (/sso/revoke)", () => {
     const before = await t.run((ctx) => ctx.db.query("users").collect());
     for (const phone of [admin.phone, member.phone]) {
       const response = await callRevoke(t, await revokeToken({ phone }));
-      expect(await response.json()).toEqual({ ok: true, sessionsEnded: 0, adminRemoved: false });
+      expect(await response.json()).toEqual({
+        ok: true,
+        sessionsEnded: 0,
+        adminRemoved: false,
+      });
     }
-    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual(before);
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual(
+      before,
+    );
     expect((await admin.as.query(api.users.me, {}))?.hubLink).toBeNull();
     expect((await member.as.query(api.users.me, {}))?.hubLink).toBeNull();
   });

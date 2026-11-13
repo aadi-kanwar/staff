@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { addRealDays } from "./companyCalendar";
+import { payoutSummary } from "./payout";
 import { PAY_MODE_LABELS, type Payday, type Schedule } from "./payroll";
 import { allStaff, scheduleFor } from "./staffData";
 
@@ -12,6 +13,8 @@ export function paydayRow(staff: Doc<"staff">, p: Payday, today: string) {
     name: staff.name,
     department: staff.department,
     propertyId: staff.propertyId,
+    /** Where to send the money (UPI / bank), if known. */
+    payTo: payoutSummary(staff.payout),
     key: p.key,
     dueDate: p.dueDate,
     /** The latest payment against it, if any. */
@@ -59,6 +62,8 @@ export function settlementRow(
     name: staff.name,
     department: staff.department,
     propertyId: staff.propertyId,
+    /** Where to send the money (UPI / bank), if known. */
+    payTo: payoutSummary(staff.payout),
     key: s.key,
     dueDate: s.dueDate,
     lastPaidOn: lastPaidOn(s.payments),

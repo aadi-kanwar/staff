@@ -3,9 +3,10 @@
 import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
+  BadgeAlert,
   ChevronLeft,
-  ClipboardCheck,
   ChevronRight,
+  ClipboardCheck,
   Copy,
   DoorOpen,
   KeyRound,
@@ -22,6 +23,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { formatPhoneForDisplay } from "@convex/lib/inputRules";
 import {
   AddAdjustmentDialog,
+  PastPaymentDialog,
   PaymentModeSelect,
   RecordPaymentDialog,
 } from "@/components/admin/money-dialogs";
@@ -49,6 +51,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { toast } from "@/components/ui/toaster";
 import { useQuery } from "@/lib/convex";
 import { cn } from "@/lib/utils";
+import { PayoutDialog, PayoutList } from "@/components/app/payout";
 import {
   nextPeriodOf,
   PayPeriodGrid,
@@ -173,7 +176,103 @@ export function ProfileTab({ data }: Props) {
           </div>
         </CardBody>
       </Card>
+      <PayoutCard data={data} />
     </>
+  );
+}
+
+/** Profile tab: where the salary is paid, editable by the admin. */
+function PayoutCard({ data }: Props) {
+  const setPayout = useMutation(api.people.setPayout);
+  const { profile } = data;
+  return (
+    <section aria-labelledby="payout" className="flex flex-col gap-2">
+      <h3 id="payout" className="font-serif text-xl">
+        Salary payment details
+      </h3>
+      <Card>
+        <CardBody className="flex flex-col gap-3">
+          <PayoutList details={profile.payout} />
+          {profile.payoutUpdatedAt ? (
+            <p className="text-xs text-foreground-secondary">
+              Last changed {formatDateTime(profile.payoutUpdatedAt)}
+            </p>
+          ) : null}
+          <PayoutDialog
+            initial={profile.payout}
+            trigger={
+              profile.payout ? "Edit payment details" : "Add payment details"
+            }
+            title="Salary payment details"
+            description={`Where ${profile.name}'s salary is paid. Saving this replaces anything they asked for.`}
+            saveLabel="Save"
+            onSave={async (details) => {
+              await setPayout({ staffId: profile.staffId, details });
+              toast.success("Payment details saved.");
+            }}
+          />
+        </CardBody>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * Shown at the top of a staff member's page while they've asked to change
+ * where their salary is paid: the new details, to approve or reject.
+ */
+export function PayoutRequestBanner({ data }: Props) {
+  const approve = useMutation(api.people.approvePayout);
+  const reject = useMutation(api.people.rejectPayout);
+  const { busy, run } = useRun();
+  const request = data.profile.payoutRequest;
+  if (!request) return null;
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-md border-2 border-warning-border bg-warning-subtle p-4"
+      role="region"
+      aria-label="Payment details to approve"
+    >
+      <div className="flex flex-col gap-0.5">
+        <p className="flex items-center gap-2 font-semibold text-warning">
+          <Icon icon={BadgeAlert} />
+          Payment details waiting for your approval
+        </p>
+        <p className="text-sm text-foreground-secondary">
+          {data.profile.name} asked on {formatDateTime(request.submittedAt)} to
+          be paid here instead
+          {data.profile.payout ? " of the details on their profile" : ""}.
+        </p>
+      </div>
+      <div className="rounded-md bg-surface px-3 py-2">
+        <PayoutList details={request} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          loading={busy}
+          onClick={() =>
+            run(
+              () => approve({ staffId: data.profile.staffId }),
+              "Approved. These are now their payment details.",
+            )
+          }
+        >
+          Approve
+        </Button>
+        <Button
+          variant="secondary"
+          loading={busy}
+          onClick={() =>
+            run(
+              () => reject({ staffId: data.profile.staffId }),
+              "Rejected. Their details stay as they were.",
+            )
+          }
+        >
+          Reject
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -860,11 +959,14 @@ export function PaydaysTab({ data }: Props) {
           Payday schedule
         </SectionTitle>
         {editable ? (
-          <AddAdjustmentDialog
-            staffId={profile.staffId}
-            targets={data.adjustmentTargets}
-            defaultTarget={data.defaultAdjustmentTarget}
-          />
+          <div className="flex flex-wrap gap-2">
+            <PastPaymentDialog staffId={profile.staffId} name={profile.name} />
+            <AddAdjustmentDialog
+              staffId={profile.staffId}
+              targets={data.adjustmentTargets}
+              defaultTarget={data.defaultAdjustmentTarget}
+            />
+          </div>
         ) : null}
       </div>
       {schedule.settlement ? (

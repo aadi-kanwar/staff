@@ -27,6 +27,7 @@ import {
   type Payday,
   type Schedule,
 } from "./lib/payroll";
+import { payoutDetails } from "./lib/payout";
 import { attendanceOf, scheduleFor, worksOn } from "./lib/staffData";
 import { monthOf, todayInIndia } from "./lib/time";
 
@@ -321,6 +322,14 @@ export const profile = staffQuery({
       joinDate: staff.joinDate,
       status: staff.status,
       lastWorkingDay: staff.lastWorkingDay ?? null,
+      /** Where their salary is paid, and a change they asked for (waiting for an admin). */
+      payout: payoutDetails(staff.payout),
+      payoutRequest: staff.payoutRequest
+        ? {
+            ...payoutDetails(staff.payoutRequest)!,
+            submittedAt: staff.payoutRequest.submittedAt,
+          }
+        : null,
     };
   },
 });

@@ -59,6 +59,12 @@ import {
   toTerms,
 } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
+import {
+  checkPayout,
+  payoutDetails,
+  payoutSummary,
+  vPayoutInput,
+} from "./lib/payout";
 import { cycleStartsAfter, termsProblem, type Terms } from "./lib/payroll";
 import { vAdjustmentType, vPayMode, vReserveStatus } from "./lib/validators";
 
@@ -120,6 +126,7 @@ export const list = adminQuery({
           },
           mustChangePassword: user?.mustChangePassword === true,
           canMarkAttendance: staff.canMarkAttendance === true,
+          payoutPending: staff.payoutRequest !== undefined,
         };
       }),
     );
@@ -204,6 +211,14 @@ export const get = adminQuery({
         reserveForfeitReason: staff.reserveForfeitReason ?? null,
         mustChangePassword: user?.mustChangePassword === true,
         canMarkAttendance: staff.canMarkAttendance === true,
+        payout: payoutDetails(staff.payout),
+        payoutUpdatedAt: staff.payout?.updatedAt ?? null,
+        payoutRequest: staff.payoutRequest
+          ? {
+              ...payoutDetails(staff.payoutRequest)!,
+              submittedAt: staff.payoutRequest.submittedAt,
+            }
+          : null,
         exitedAt: staff.exitedAt ?? null,
       },
       today,
@@ -1018,6 +1033,89 @@ export async function deleteLogin(ctx: MutationCtx, userId: Id<"users">) {
     await ctx.db.delete(sub._id);
   await ctx.db.delete(userId);
 }
+
+/** The admin sets where the salary is paid (UPI / bank). Replaces any pending request. */
+export const setPayout = adminMutation({
+  args: { staffId: v.id("staff"), details: vPayoutInput },
+  handler: async (ctx, args) => {
+    const staff = await loadStaff(ctx, ctx.admin, args.staffId);
+    const details = checkPayout(args.details, false);
+    const empty =
+      details.upiId === undefined && details.accountNumber === undefined;
+    await ctx.db.patch(staff._id, {
+      payout: empty
+        ? undefined
+        : { ...details, updatedAt: Date.now(), updatedBy: ctx.admin.userId },
+      payoutRequest: undefined,
+    });
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "staff.payout_updated",
+      entityType: "staff",
+      entityId: staff._id,
+      staffId: staff._id,
+      metadata: {
+        before: payoutSummary(staff.payout),
+        after: payoutSummary(details),
+      },
+    });
+    return null;
+  },
+});
+
+/** Accepts the change a staff member asked for: it becomes their payment details. */
+export const approvePayout = adminMutation({
+  args: { staffId: v.id("staff") },
+  handler: async (ctx, { staffId }) => {
+    const staff = await loadStaff(ctx, ctx.admin, staffId);
+    const request = staff.payoutRequest;
+    if (!request)
+      throw appError("CONFLICT", "There's no change waiting for approval.");
+    const details = payoutDetails(request)!;
+    await ctx.db.patch(staff._id, {
+      payout: {
+        ...details,
+        updatedAt: Date.now(),
+        updatedBy: ctx.admin.userId,
+      },
+      payoutRequest: undefined,
+    });
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "staff.payout_approved",
+      entityType: "staff",
+      entityId: staff._id,
+      staffId: staff._id,
+      metadata: {
+        before: payoutSummary(staff.payout),
+        after: payoutSummary(details),
+      },
+    });
+    return null;
+  },
+});
+
+/** Turns down the change a staff member asked for; their current details stay. */
+export const rejectPayout = adminMutation({
+  args: { staffId: v.id("staff") },
+  handler: async (ctx, { staffId }) => {
+    const staff = await loadStaff(ctx, ctx.admin, staffId);
+    if (!staff.payoutRequest) return null;
+    await ctx.db.patch(staff._id, { payoutRequest: undefined });
+    await writeAudit(ctx, {
+      organizationId: staff.organizationId,
+      actorUserId: ctx.admin.userId,
+      action: "staff.payout_rejected",
+      entityType: "staff",
+      entityId: staff._id,
+      staffId: staff._id,
+      metadata: { requested: payoutSummary(staff.payoutRequest) },
+    });
+    return null;
+  },
+});
 
 /** Gives or takes away attendance marking for the other staff of their property. */
 export const setMarking = adminMutation({

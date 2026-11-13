@@ -7,7 +7,7 @@ import {
   openPaydays,
   paydaysBetween,
 } from "./lib/adminViews";
-import { worksOn } from "./lib/staffData";
+import { allStaff, worksOn } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
 
 export const summary = adminQuery({
@@ -58,6 +58,10 @@ export const summary = adminQuery({
         .reduce((a, { schedule }) => a + schedule.reserve.amount, 0),
       activeStaff: entries.filter(({ staff }) => staff.status === "active")
         .length,
+      /** People who asked to change where their salary is paid. */
+      payoutApprovals: (await allStaff(ctx, ctx.admin))
+        .filter((s) => s.payoutRequest !== undefined)
+        .map((s) => ({ staffId: s._id, name: s.name })),
       settlementsWaiting: entries
         .filter(
           ({ staff }) =>

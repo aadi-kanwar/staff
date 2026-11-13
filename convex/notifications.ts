@@ -442,3 +442,31 @@ export const removeSubscriptions = internalMutation({
     return null;
   },
 });
+
+/** Tells the organisation's admins that someone asked to change their payment details. */
+export const notifyPayoutRequest = internalMutation({
+  args: { staffId: v.id("staff") },
+  handler: async (ctx, { staffId }) => {
+    const staff = await ctx.db.get(staffId);
+    if (!staff?.payoutRequest) return null;
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_org_role", (q) =>
+        q.eq("organizationId", staff.organizationId).eq("role", "admin"),
+      )
+      .collect();
+    await queue(ctx, [
+      {
+        devices: await devicesOf(
+          ctx,
+          admins.filter((a) => a.disabled !== true).map((a) => a._id),
+        ),
+        title: "Payment details to approve",
+        body: `${staff.name} updated where their salary should be paid. Please check and approve.`,
+        url: `/admin/staff/${staff._id}?tab=profile`,
+        tag: `payout-${staff._id}`,
+      },
+    ]);
+    return null;
+  },
+});

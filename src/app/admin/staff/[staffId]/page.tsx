@@ -20,6 +20,7 @@ import {
   ReserveTab,
   SalaryTab,
   AttendanceTab,
+  PayoutRequestBanner,
 } from "@/components/admin/staff-tabs";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -117,6 +118,7 @@ function StaffDetail() {
           hint={profile.reserveStatus}
         />
       </dl>
+      <PayoutRequestBanner data={data} />
       <SegmentedTabs
         label="Staff record"
         idPrefix="staff"
