@@ -160,6 +160,9 @@ export default defineSchema({
     note: v.string(),
     date: v.string(),
     paydayKey: v.string(),
+    /** Past bonuses / deductions entered by period: the dates they were for. */
+    periodFrom: v.optional(v.string()),
+    periodTo: v.optional(v.string()),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
   })

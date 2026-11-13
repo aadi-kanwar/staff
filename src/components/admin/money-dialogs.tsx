@@ -345,10 +345,14 @@ export function AddAdjustmentDialog({
   );
 }
 
+type PastKind = "payment" | "bonus" | "deduction";
+
 /**
- * Records a payment made before (outside the app) for a salary period: the
- * admin gives the dates the salary was for, the amount, when it was paid and
- * how. It's spread over that period's paydays, oldest first (previewed here).
+ * Records something from before the app (or outside it) for a period: a
+ * salary payment, a bonus or a deduction. A payment is spread over the pay
+ * periods in those dates, oldest first; a bonus or deduction goes on the
+ * first of them. Anything with no pay period to go on is kept as a past
+ * entry for those dates. Nothing is refused (previewed here).
  */
 export function PastPaymentDialog({
   staffId,
@@ -359,36 +363,35 @@ export function PastPaymentDialog({
 }) {
   const record = useMutation(api.payments.recordPast);
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<PastKind>("payment");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [paidOn, setPaidOn] = useState(todayIn());
   const [mode, setMode] = useState<Mode>("cash");
+  const [alreadyPaid, setAlreadyPaid] = useState(true);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const value = Number(amount);
-  const ready = from !== "" && to !== "" && from <= to;
+  const ready = from !== "" && to !== "";
   const plan = useQuery(
     api.payments.planPastPayment,
     ready ? { staffId, from, to, amount: value > 0 ? value : 0 } : "skip",
   );
-  const problem = !ready
-    ? null
-    : plan && plan.covered.length === 0
-      ? "Those dates don't cover any pay period."
-      : plan && value > plan.owed
-        ? `That's more than the ${formatINR(plan.owed)} still owed for those dates.`
-        : null;
+  const paid = kind === "payment" || (kind === "bonus" && alreadyPaid);
+  const target = plan?.covered[0] ?? null;
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
+          setKind("payment");
           setFrom("");
           setTo("");
           setAmount("");
           setPaidOn(todayIn());
+          setAlreadyPaid(true);
           setNote("");
         }
       }}
@@ -396,12 +399,12 @@ export function PastPaymentDialog({
       <DialogTrigger asChild>
         <Button variant="secondary">
           <Icon icon={History} />
-          Record a past payment
+          Record a past entry
         </Button>
       </DialogTrigger>
       <DialogContent
-        title={`Past payment to ${name}`}
-        description="For salary already paid outside the app. Give the dates the salary was for; the amount is applied to the pay periods in those dates, oldest first."
+        title={`Past entry for ${name}`}
+        description="A salary payment, bonus or deduction from before, for the dates it was for. It goes on the pay periods in those dates; if there are none, it's kept as a past entry for those dates."
       >
         <form
           className="flex flex-col gap-4"
@@ -409,17 +412,23 @@ export function PastPaymentDialog({
             e.preventDefault();
             setBusy(true);
             try {
-              const result = await record({
+              await record({
                 staffId,
+                kind,
                 from,
                 to,
                 amount: value,
-                paidOn,
-                mode,
+                paidOn: paid ? paidOn : undefined,
+                mode: paid ? mode : undefined,
+                alreadyPaid: kind === "bonus" ? alreadyPaid : undefined,
                 note: note.trim() || undefined,
               });
               toast.success(
-                `Recorded against ${result.paydays} ${result.paydays === 1 ? "payday" : "paydays"}.`,
+                kind === "payment"
+                  ? "Past payment recorded."
+                  : kind === "bonus"
+                    ? "Past bonus recorded."
+                    : "Past deduction recorded.",
               );
               setOpen(false);
             } catch (error) {
@@ -429,8 +438,21 @@ export function PastPaymentDialog({
             }
           }}
         >
+          <Field id="past-kind" label="What happened">
+            {(p) => (
+              <NativeSelect
+                {...p}
+                value={kind}
+                onChange={(e) => setKind(e.target.value as PastKind)}
+              >
+                <option value="payment">Salary paid</option>
+                <option value="bonus">Bonus</option>
+                <option value="deduction">Deduction (reduction)</option>
+              </NativeSelect>
+            )}
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field id="past-from" label="Salary for: from">
+            <Field id="past-from" label="For: from">
               {(p) => (
                 <Input
                   {...p}
@@ -452,38 +474,55 @@ export function PastPaymentDialog({
                 />
               )}
             </Field>
-            <Field id="past-amount" label="Amount paid (₹)">
-              {(p) => (
-                <Input
-                  {...p}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  step={1}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                />
-              )}
-            </Field>
-            <Field id="past-paid-on" label="Paid on">
-              {(p) => (
-                <Input
-                  {...p}
-                  type="date"
-                  max={todayIn()}
-                  value={paidOn}
-                  onChange={(e) => setPaidOn(e.target.value)}
-                  required
-                />
-              )}
-            </Field>
           </div>
-          <PaymentModeSelect id="past-mode" value={mode} onChange={setMode} />
+          <Field id="past-amount" label="Amount (₹)">
+            {(p) => (
+              <Input
+                {...p}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+            )}
+          </Field>
+          {kind === "bonus" ? (
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-5 accent-primary"
+                checked={alreadyPaid}
+                onChange={(e) => setAlreadyPaid(e.target.checked)}
+              />
+              The bonus was already paid
+            </label>
+          ) : null}
+          {paid ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field id="past-paid-on" label="Paid on">
+                {(p) => (
+                  <Input
+                    {...p}
+                    type="date"
+                    value={paidOn}
+                    onChange={(e) => setPaidOn(e.target.value)}
+                  />
+                )}
+              </Field>
+              <PaymentModeSelect
+                id="past-mode"
+                value={mode}
+                onChange={setMode}
+              />
+            </div>
+          ) : null}
           <Field
             id="past-note"
             label="Note (optional)"
-            hint="Shown to the staff member with the payment."
+            hint="Shown to the staff member."
           >
             {(p) => (
               <Input
@@ -495,33 +534,61 @@ export function PastPaymentDialog({
               />
             )}
           </Field>
-          {ready && plan && plan.covered.length > 0 ? (
+          {ready && plan ? (
             <div
               className="flex flex-col gap-1 rounded-md bg-subtle px-3 py-2 text-sm"
-              aria-label="How it will be applied"
+              aria-label="Where it goes"
             >
-              <p className="font-medium">Pay periods in these dates</p>
-              {plan.covered.map((p) => (
-                <p key={p.key} className="flex justify-between gap-3">
-                  <span>
-                    {formatDay(p.cycleStartDate, "d MMM")} –{" "}
-                    {formatDay(p.cycleEndDate, "d MMM yyyy")}
-                    <span className="text-foreground-secondary">
-                      {" "}
-                      ·{" "}
-                      {p.outstanding <= 0
-                        ? "already paid"
-                        : `${formatINR(p.outstanding)} owed`}
-                    </span>
-                  </span>
-                  <span className="tabular font-medium">
-                    {p.apply > 0 ? formatINR(p.apply) : "–"}
-                  </span>
+              {kind === "payment" ? (
+                <>
+                  {plan.covered.map((p) => (
+                    <p key={p.key} className="flex justify-between gap-3">
+                      <span>
+                        {formatDay(p.cycleStartDate, "d MMM")} –{" "}
+                        {formatDay(p.cycleEndDate, "d MMM yyyy")}
+                        <span className="text-foreground-secondary">
+                          {" "}
+                          ·{" "}
+                          {p.outstanding <= 0
+                            ? "already paid"
+                            : `${formatINR(p.outstanding)} owed`}
+                        </span>
+                      </span>
+                      <span className="tabular font-medium">
+                        {p.apply > 0 ? formatINR(p.apply) : "–"}
+                      </span>
+                    </p>
+                  ))}
+                  {plan.unlinked > 0 ? (
+                    <p className="flex justify-between gap-3">
+                      <span className="text-foreground-secondary">
+                        {plan.covered.length === 0
+                          ? "No pay period in these dates: kept as a past payment"
+                          : "The rest: kept as a past payment for these dates"}
+                      </span>
+                      <span className="tabular font-medium">
+                        {formatINR(plan.unlinked)}
+                      </span>
+                    </p>
+                  ) : null}
+                </>
+              ) : target ? (
+                <p>
+                  Goes on the pay period{" "}
+                  {formatDay(target.cycleStartDate, "d MMM")} –{" "}
+                  {formatDay(target.cycleEndDate, "d MMM yyyy")}
+                  {kind === "deduction"
+                    ? ", lowering what it pays."
+                    : ", adding to what it pays."}
                 </p>
-              ))}
+              ) : (
+                <p className="text-foreground-secondary">
+                  No pay period in these dates: kept as a past {kind} for these
+                  dates.
+                </p>
+              )}
             </div>
           ) : null}
-          {problem ? <Banner tone="danger">{problem}</Banner> : null}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="ghost">Cancel</Button>
@@ -529,11 +596,9 @@ export function PastPaymentDialog({
             <Button
               type="submit"
               loading={busy}
-              disabled={
-                !ready || !(value > 0) || problem !== null || plan === undefined
-              }
+              disabled={!ready || !(value > 0)}
             >
-              Record {value > 0 ? formatINR(value) : "payment"}
+              Record {value > 0 ? formatINR(value) : ""}
             </Button>
           </DialogFooter>
         </form>

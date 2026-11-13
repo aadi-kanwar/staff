@@ -42,6 +42,7 @@ import {
   PAY_MODE_LABELS,
   computeSchedule,
   finalKey,
+  pastKey,
   isValidRevisionStart,
   revisionStarts,
   sortTerms,
@@ -57,6 +58,7 @@ import {
   scheduleFor,
   termsOf,
   toTerms,
+  pastEntriesOf,
 } from "./lib/staffData";
 import { todayInIndia } from "./lib/time";
 import {
@@ -194,6 +196,8 @@ export const get = adminQuery({
 
     return {
       absences,
+      /** Past payments / bonuses / deductions for dates with no pay period. */
+      pastEntries: await pastEntriesOf(ctx, staff),
       profile: {
         staffId: staff._id,
         name: staff.name,
@@ -824,6 +828,7 @@ async function requireMoneyFits(
   });
   const keys = new Set(schedule.paydays.map((p) => p.key));
   keys.add(finalKey(staff._id));
+  keys.add(pastKey(staff._id));
   const lost = [
     ...input.payments
       .filter((p) => !keys.has(p.paydayKey))

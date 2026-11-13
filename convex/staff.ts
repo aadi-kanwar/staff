@@ -28,7 +28,12 @@ import {
   type Schedule,
 } from "./lib/payroll";
 import { payoutDetails } from "./lib/payout";
-import { attendanceOf, scheduleFor, worksOn } from "./lib/staffData";
+import {
+  attendanceOf,
+  pastEntriesOf,
+  scheduleFor,
+  worksOn,
+} from "./lib/staffData";
 import { monthOf, todayInIndia } from "./lib/time";
 
 type Line = { label: string; amount: number };
@@ -205,6 +210,10 @@ export const payCalendar = staffQuery({
     return {
       today,
       absences,
+      /** Past entries for dates with no pay period: shown on the calendar as recorded. */
+      pastEntries: (await pastEntriesOf(ctx, staff)).map(
+        ({ kind, from, to, amount }) => ({ kind, from, to, amount }),
+      ),
       joinDate: staff.joinDate,
       lastWorkingDay: staff.lastWorkingDay ?? null,
       status: staff.status,
@@ -238,6 +247,41 @@ export const payments = staffQuery({
     );
     const rows = shown.map((p, i) => paydayView(p, i + 1));
     if (schedule.settlement) rows.push(settlementView(schedule, today));
+    // Past entries for dates with no pay period, as their own rows.
+    for (const e of await pastEntriesOf(ctx, staff)) {
+      const sign = e.kind === "deduction" ? -1 : 1;
+      rows.push({
+        id: `past-${e.id}`,
+        title:
+          e.kind === "payment"
+            ? "Past payment"
+            : e.kind === "bonus"
+              ? "Past bonus"
+              : "Past deduction",
+        date: e.paidOn ?? e.to,
+        amount: sign * e.amount,
+        paid: e.kind === "payment" ? e.amount : 0,
+        remaining: 0,
+        status: "paid",
+        lines: [
+          {
+            label: e.note ?? `For ${e.from} to ${e.to}`,
+            amount: sign * e.amount,
+          },
+        ],
+        payments:
+          e.kind === "payment"
+            ? [
+                {
+                  paidOn: e.paidOn!,
+                  amount: e.amount,
+                  method: MODE_LABELS[e.mode ?? ""] ?? "Other",
+                  note: e.note,
+                },
+              ]
+            : [],
+      });
+    }
     const owed = (r: (typeof rows)[number]) =>
       r.date <= today && r.remaining > 0;
     const overdue = rows

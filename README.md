@@ -28,12 +28,19 @@ tokens, its UI components, Vitest + convex-test.
 
 ## Past payments and payment details
 
-- **Record a past payment** (staff member → Paydays tab): for salary paid
-  outside the app. Give the dates the salary was for, the amount, when it was
-  paid and how. It's applied to the pay periods in those dates (those with at
-  least half their days inside), oldest first, with a preview; more than is
-  owed for those dates is refused. The calendars, ledger and the staff
-  member's Payments show it like any other payment (`payments.recordPast`).
+- **Record a past entry** (staff member → Paydays tab): a salary payment,
+  bonus or deduction from before, for the dates it was for. Nothing is
+  refused:
+  - A payment fills the pay periods in those dates (those with at least half
+    their days inside, else any that overlap), oldest first. Anything beyond
+    what they owe, or all of it if the dates have no pay period, is kept as
+    a past payment for those dates.
+  - A bonus or deduction goes on the first pay period in those dates
+    (changing what it pays); a bonus can be marked as already paid. With no
+    pay period in the dates it's kept as a past entry.
+  - Past entries with no pay period are history only (they never change
+    what's owed or the final settlement). They show in the Ledger, on the
+    staff member's Payments and as dashed green days on both calendars.
 - **Salary payment details** (UPI ID and/or bank account: holder's name,
   account number, IFSC, bank): the admin sets them on the Profile tab. A
   staff member can send a change from their Profile; it waits for an admin.
