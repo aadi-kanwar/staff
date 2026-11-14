@@ -33,10 +33,16 @@ export default function StaffLayout({
       </StaffShell>
     );
   }
-  if (me.role !== "staff") {
+  if (me.role !== "staff" || me.staffStatus === null) {
     return (
       <StaffShell>
-        <NotAuthorizedState description="This account isn't set up yet. Please contact the office." />
+        <NotAuthorizedState
+          description={
+            me.role === "staff"
+              ? "Your admin is still adding your salary details. Please check again later."
+              : "This account isn't set up yet. Please contact the office."
+          }
+        />
         <div className="flex justify-center">
           <SignOutButton variant="secondary" />
         </div>

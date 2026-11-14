@@ -34,6 +34,8 @@ export type AuditAction =
   | "admin.password_reset"
   | "sso.signed_in"
   | "sso.access_revoked"
+  | "hub.person_synced"
+  | "hub.property_linked"
   | "staff.payout_updated"
   | "staff.payout_requested"
   | "staff.payout_approved"
