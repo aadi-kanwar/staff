@@ -18,7 +18,8 @@ export type AppErrorCode =
   | "WEAK_PASSWORD"
   | "INVALID_DATE"
   | "ORG_REQUIRED"
-  | "SSO_LINK_EXPIRED";
+  | "SSO_LINK_EXPIRED"
+  | "USE_HUB";
 
 export type AppErrorData = { code: AppErrorCode; message: string };
 
@@ -39,7 +40,8 @@ export const DEFAULT_MESSAGES: Record<AppErrorCode, string> = {
   INVALID_DATE: "That date can't be used here.",
   ORG_REQUIRED: "Set up your organisation first.",
   // Deliberately the same for every Admin Hub sign-in failure: never say why.
-  SSO_LINK_EXPIRED: "This link has expired. Open it again from the Admin Hub.",
+  SSO_LINK_EXPIRED: "This link has expired. Open it again from the Livoza Hub.",
+  USE_HUB: "This app now uses the Livoza Hub to sign in. Sign in there, then open it.",
 };
 
 export function appError(

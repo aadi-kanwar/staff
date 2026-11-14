@@ -29,6 +29,7 @@ import type * as lib_companyCalendar from "../lib/companyCalendar.js";
 import type * as lib_csv from "../lib/csv.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_functions from "../lib/functions.js";
+import type * as lib_hubSync from "../lib/hubSync.js";
 import type * as lib_inputRules from "../lib/inputRules.js";
 import type * as lib_money from "../lib/money.js";
 import type * as lib_notificationText from "../lib/notificationText.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "lib/csv": typeof lib_csv;
   "lib/errors": typeof lib_errors;
   "lib/functions": typeof lib_functions;
+  "lib/hubSync": typeof lib_hubSync;
   "lib/inputRules": typeof lib_inputRules;
   "lib/money": typeof lib_money;
   "lib/notificationText": typeof lib_notificationText;

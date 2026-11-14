@@ -405,16 +405,24 @@ export const create = adminAction({
     if (problem !== null) throw appError("WEAK_PASSWORD", problem);
     const { initialPassword, ...details } = args;
     const organizationId = ctx.admin.organizationId;
+    // Someone the Livoza Hub already added as Staff has an account here but
+    // no staff record yet: this adds their pay details to that account (they
+    // keep signing in through the hub; the password typed here isn't used).
+    const hubLogin: Id<"users"> | null = await ctx.runQuery(internal.people.hubLoginWithoutRecord, { phone });
     await ctx.runQuery(internal.people.checkNewStaff, {
       ...details,
       phone,
       organizationId,
+      ownLogin: hubLogin ?? undefined,
     });
     let userId: Id<"users">;
-    try {
-      userId = await createLogin(ctx, phone, initialPassword);
-    } catch {
-      throw appError("CONFLICT", "That mobile number already has an account.");
+    if (hubLogin !== null) userId = hubLogin;
+    else {
+      try {
+        userId = await createLogin(ctx, phone, initialPassword);
+      } catch {
+        throw appError("CONFLICT", "That mobile number already has an account.");
+      }
     }
     try {
       const staffId: Id<"staff"> = await ctx.runMutation(
@@ -429,9 +437,27 @@ export const create = adminAction({
       );
       return { staffId };
     } catch (error) {
-      await ctx.runMutation(internal.people.removeLogin, { userId });
+      if (hubLogin === null) await ctx.runMutation(internal.people.removeLogin, { userId });
       throw error;
     }
+  },
+});
+
+/** A staff account the Livoza Hub made that has no staff record yet (see `create`), or null. */
+export const hubLoginWithoutRecord = internalQuery({
+  args: { phone: v.string() },
+  returns: v.union(v.null(), v.id("users")),
+  handler: async (ctx, { phone }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("phone", (q) => q.eq("phone", phone))
+      .first();
+    if (user === null || user.hubUserId === undefined || user.role !== "staff") return null;
+    const record = await ctx.db
+      .query("staff")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+    return record === null ? user._id : null;
   },
 });
 
@@ -542,9 +568,9 @@ async function requireOpenProperty(
 }
 
 export const checkNewStaff = internalQuery({
-  args: { ...newStaffArgs, organizationId: v.id("organizations") },
-  handler: async (ctx, args) => {
-    await validateNewStaff(ctx, args, todayInIndia());
+  args: { ...newStaffArgs, organizationId: v.id("organizations"), ownLogin: v.optional(v.id("users")) },
+  handler: async (ctx, { ownLogin, ...args }) => {
+    await validateNewStaff(ctx, args, todayInIndia(), ownLogin);
     return null;
   },
 });
@@ -564,11 +590,13 @@ export const insertStaff = internalMutation({
     const today = args.asOf ?? todayInIndia();
     const valid = await validateNewStaff(ctx, args, today, args.userId);
     const now = Date.now();
+    // People from the Livoza Hub sign in there, so there's no password to change here.
+    const fromHub = (await ctx.db.get(args.userId))?.hubUserId !== undefined;
     await ctx.db.patch(args.userId, {
       role: "staff",
       organizationId: args.organizationId,
       name: valid.name,
-      mustChangePassword: args.mustChangePassword ?? true,
+      mustChangePassword: fromHub ? undefined : (args.mustChangePassword ?? true),
     });
     const staffId = await ctx.db.insert("staff", {
       organizationId: args.organizationId,

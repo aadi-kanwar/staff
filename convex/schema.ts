@@ -63,7 +63,11 @@ export default defineSchema({
     name: v.string(), // unique within the organisation (case-insensitive)
     status: vRecordStatus,
     createdAt: v.number(),
-  }).index("by_org_status", ["organizationId", "status"]),
+    /** The property's id in the Livoza Hub (set by the hub's sync or import). */
+    hubPropertyId: v.optional(v.string()),
+  })
+    .index("by_org_status", ["organizationId", "status"])
+    .index("by_hubPropertyId", ["hubPropertyId"]),
 
   // Convex Auth's users table, plus who the account belongs to.
   users: defineTable({
@@ -83,9 +87,12 @@ export default defineSchema({
     disabled: v.optional(v.boolean()),
     /** True once a master admin has signed in through the Admin Hub (single sign-on). */
     ssoManaged: v.optional(v.boolean()),
+    /** The person's id in the Livoza Hub, once the hub has synced or signed them in. */
+    hubUserId: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
+    .index("by_hubUserId", ["hubUserId"])
     .index("by_role", ["role"])
     .index("by_org_role", ["organizationId", "role"]),
 
