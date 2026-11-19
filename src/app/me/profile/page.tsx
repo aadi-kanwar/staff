@@ -9,6 +9,7 @@ import {
   PhoneNotificationsCard,
 } from "@/components/app/notifications";
 import { SignOutButton, useMe } from "@/components/app/session";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -65,6 +66,7 @@ export default function StaffProfile() {
             Change password
           </Link>
         </Button>
+        <ThemeToggle full />
         <SignOutButton variant="secondary" full />
       </div>
       <p className="text-sm text-foreground-secondary">
