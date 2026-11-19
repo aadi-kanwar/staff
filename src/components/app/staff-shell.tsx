@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/nav/staff-nav";
 import { AppFrame } from "./app-frame";
 import { Brand } from "./brand";
 import { SignOutButton, useMe } from "./session";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 /**
  * Frame for staff screens (mobile-first): app name, and the bottom
@@ -25,7 +26,12 @@ export function StaffShell({
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
             <Brand />
-            {nav ? null : <SignOutButton />}
+            {nav ? null : (
+              <span className="flex items-center gap-1">
+                <ThemeToggle />
+                <SignOutButton />
+              </span>
+            )}
           </div>
         </header>
       }
