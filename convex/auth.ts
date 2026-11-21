@@ -7,6 +7,7 @@ import type { ActionCtx } from "./_generated/server";
 import { FAILED_ATTEMPTS_LIMIT } from "./authLimits";
 import { appError } from "./lib/errors";
 import { normalizePhone } from "./lib/inputRules";
+import { LOGIN_MS } from "./lib/loginLength";
 
 export const PHONE_PASSWORD_PROVIDER = "phone-password";
 
@@ -105,6 +106,8 @@ async function signInExisting(ctx: ActionCtx, phone: string, password: string) {
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [PhonePassword, HubSso],
+  // Members sign in once a week (convex/lib/loginLength.ts).
+  session: { totalDurationMs: LOGIN_MS, inactiveDurationMs: LOGIN_MS },
   signIn: {
     // Convex Auth's own per-account limit, kept above ours so ours applies first.
     maxFailedAttempsPerHour: FAILED_ATTEMPTS_LIMIT * 4 + 10,
