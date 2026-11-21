@@ -49,6 +49,12 @@ tokens, its UI components, Vitest + convex-test.
   their page, and a phone notification to admins. Payroll shows "Pay to"
   with the approved details.
 
+## Staying signed in
+
+A login lasts 7 days, then the person signs in again (once a week). It stays
+on the phone when the app or browser is closed. Change the length in
+`convex/lib/loginLength.ts`. Admin Hub logins keep their own 12 hours.
+
 ## Admins
 
 - **Settings → Admins** lists everyone who manages the organisation. Every

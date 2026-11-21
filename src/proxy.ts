@@ -3,6 +3,7 @@ import {
   createRouteMatcher,
   nextjsMiddlewareRedirect,
 } from "@convex-dev/auth/nextjs/server";
+import { LOGIN_MS } from "@convex/lib/loginLength";
 
 /**
  * Runs before every page. Sends signed-out visitors to /signin, and signed-in
@@ -23,6 +24,10 @@ export const proxy = convexAuthNextjsMiddleware(async (request, { convexAuth }) 
   // The design reference is open without login only on a developer's machine.
   if (isDesignPage(request) && process.env.NODE_ENV === "development") return undefined;
   if (!signedIn) return nextjsMiddlewareRedirect(request, "/signin");
+}, {
+  // Keep the login on the device when the app or browser is closed (a plain
+  // session cookie is dropped then). It lasts as long as the login: 7 days.
+  cookieConfig: { maxAge: LOGIN_MS / 1000 },
 });
 
 export const config = {
